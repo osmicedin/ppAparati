@@ -87,7 +87,7 @@
                                           DisplayMemberPath="Prikaz" />
 
                                 <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Tip PP aparata *" />
-                                <TextBox x:Name="txtTip" Grid.Row="1" Grid.Column="2" MaxLength="50" />
+                                <ComboBox x:Name="cmbTip" Grid.Row="1" Grid.Column="2" />
 
                                 <TextBlock Grid.Column="4" Style="{StaticResource FieldLabel}" Text="Punjenje (kg) *" />
                                 <TextBox x:Name="txtPunjenje" Grid.Row="1" Grid.Column="4" MaxLength="12" />

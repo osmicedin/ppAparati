@@ -46,6 +46,7 @@ public partial class MainWindow : Window
         txtGodinaProizvodnje.Text = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
         txtKonstatacija.Text = "Ispravan";
         txtIspitivanjeIzvrsio.Text = _korisnik.PunoIme;
+        cmbTip.ItemsSource = new[] { "S6", "S3" };
 
         cmbKontoUnos.AddHandler(
             TextBoxBase.TextChangedEvent,
@@ -154,7 +155,7 @@ public partial class MainWindow : Window
             cmbKontoUnos.Text = string.Empty;
         }
 
-        txtTip.Clear();
+        cmbTip.SelectedItem = null;
         txtPunjenje.Clear();
         txtSerijskiBroj.Clear();
         txtGodinaProizvodnje.Text = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
@@ -162,7 +163,7 @@ public partial class MainWindow : Window
         txtKonstatacija.Text = "Ispravan";
         txtVozilo.Clear();
         txtIspitivanjeIzvrsio.Text = _korisnik.PunoIme;
-        txtTip.Focus();
+        cmbTip.Focus();
     }
 
     private async void KontoComboBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -331,7 +332,7 @@ public partial class MainWindow : Window
 
         input = new PpAparatInput(
             konto!.Sifra.Trim(),
-            txtTip.Text.Trim(),
+            cmbTip.SelectedItem as string ?? string.Empty,
             punjenje,
             txtSerijskiBroj.Text.Trim(),
             godina,
