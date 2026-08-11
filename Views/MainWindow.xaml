@@ -80,9 +80,9 @@
                                 <ComboBox x:Name="cmbKontoUnos"
                                           Grid.Row="1"
                                           IsEditable="True"
-                                          IsTextSearchEnabled="True"
-                                          IsTextSearchCaseSensitive="False"
-                                          TextSearch.TextPath="Prikaz"
+                                          IsTextSearchEnabled="False"
+                                          StaysOpenOnEdit="True"
+                                          DropDownOpened="KontoComboBox_DropDownOpened"
                                           DisplayMemberPath="Prikaz" />
 
                                 <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Tip PP aparata *" />
@@ -190,9 +190,9 @@
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="Konto / kupac *" />
                                 <ComboBox x:Name="cmbKontoIzvjestaj"
                                           IsEditable="True"
-                                          IsTextSearchEnabled="True"
-                                          IsTextSearchCaseSensitive="False"
-                                          TextSearch.TextPath="Prikaz"
+                                          IsTextSearchEnabled="False"
+                                          StaysOpenOnEdit="True"
+                                          DropDownOpened="KontoComboBox_DropDownOpened"
                                           DisplayMemberPath="Prikaz" />
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="2">

@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using Microsoft.Win32;
 using PpEvidencija.Data;
 using PpEvidencija.Models;
@@ -16,9 +18,11 @@ public partial class MainWindow : Window
     private readonly PpAparatRepository _ppAparatRepository;
     private readonly PpAparatValidator _validator;
     private readonly IDocxReportService _docxReportService;
-    private IReadOnlyList<Konto> _konta = [];
     private IReadOnlyList<PpAparatRecord> _trenutniIzvjestaj = [];
     private string? _zadnjiDocxPath;
+    private CancellationTokenSource? _kontoUnosSearchCancellation;
+    private CancellationTokenSource? _kontoIzvjestajSearchCancellation;
+    private bool _suppressKontoSearch;
 
     public MainWindow(
         AutentifikovaniKorisnik korisnik,
@@ -39,6 +43,14 @@ public partial class MainWindow : Window
         dpDatumZakljucivanja.SelectedDate = DateTime.Today;
         txtGodinaProizvodnje.Text = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
         txtKonstatacija.Text = "Ispravan";
+        txtIspitivanjeIzvrsio.Text = _korisnik.PunoIme;
+
+        cmbKontoUnos.AddHandler(
+            TextBoxBase.TextChangedEvent,
+            new TextChangedEventHandler(KontoComboBox_TextChanged));
+        cmbKontoIzvjestaj.AddHandler(
+            TextBoxBase.TextChangedEvent,
+            new TextChangedEventHandler(KontoComboBox_TextChanged));
 
         cmbMjesec.ItemsSource = KreirajMjesece();
         cmbMjesec.SelectedIndex = DateTime.Today.Month - 1;
@@ -54,14 +66,10 @@ public partial class MainWindow : Window
     private async Task UcitajPocetnePodatkeAsync()
     {
         IsEnabled = false;
-        txtGlobalStatus.Text = "Učitavanje konta i dostupnih godina...";
+        txtGlobalStatus.Text = "Učitavanje dostupnih godina...";
 
         try
         {
-            _konta = await _kontoRepository.GetAllAsync();
-            cmbKontoUnos.ItemsSource = _konta;
-            cmbKontoIzvjestaj.ItemsSource = _konta;
-
             var years = (await _ppAparatRepository.GetAvailableYearsAsync()).ToList();
             if (!years.Contains(DateTime.Today.Year))
             {
@@ -72,7 +80,7 @@ public partial class MainWindow : Window
             cmbGodina.ItemsSource = years;
             cmbGodina.SelectedItem = DateTime.Today.Year;
 
-            txtGlobalStatus.Text = $"Učitano konta: {_konta.Count}.";
+            txtGlobalStatus.Text = "Upišite početak broja konta za pretragu.";
         }
         catch (Exception ex)
         {
@@ -151,8 +159,97 @@ public partial class MainWindow : Window
         dpDatumServisa.SelectedDate = DateTime.Today;
         txtKonstatacija.Text = "Ispravan";
         txtVozilo.Clear();
-        txtIspitivanjeIzvrsio.Clear();
+        txtIspitivanjeIzvrsio.Text = _korisnik.PunoIme;
         txtTip.Focus();
+    }
+
+    private async void KontoComboBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_suppressKontoSearch || sender is not ComboBox comboBox || !comboBox.IsKeyboardFocusWithin)
+        {
+            return;
+        }
+
+        if (comboBox.SelectedItem is Konto selected
+            && string.Equals(comboBox.Text.Trim(), selected.Prikaz, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await SearchKontaAsync(comboBox, useDebounce: true);
+    }
+
+    private async void KontoComboBox_DropDownOpened(object sender, EventArgs e)
+    {
+        if (sender is ComboBox comboBox && comboBox.Items.Count == 0)
+        {
+            await SearchKontaAsync(comboBox, useDebounce: false);
+        }
+    }
+
+    private async Task SearchKontaAsync(ComboBox comboBox, bool useDebounce)
+    {
+        var cancellation = new CancellationTokenSource();
+        if (ReferenceEquals(comboBox, cmbKontoUnos))
+        {
+            _kontoUnosSearchCancellation?.Cancel();
+            _kontoUnosSearchCancellation?.Dispose();
+            _kontoUnosSearchCancellation = cancellation;
+        }
+        else
+        {
+            _kontoIzvjestajSearchCancellation?.Cancel();
+            _kontoIzvjestajSearchCancellation?.Dispose();
+            _kontoIzvjestajSearchCancellation = cancellation;
+        }
+
+        var token = cancellation.Token;
+        var prefix = comboBox.Text.Trim();
+
+        try
+        {
+            if (useDebounce)
+            {
+                await Task.Delay(250, token);
+            }
+
+            var konta = await _kontoRepository.SearchByPrefixAsync(prefix, cancellationToken: token);
+            token.ThrowIfCancellationRequested();
+
+            if (!string.Equals(prefix, comboBox.Text.Trim(), StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var enteredText = comboBox.Text;
+            _suppressKontoSearch = true;
+            try
+            {
+                comboBox.ItemsSource = konta;
+                comboBox.SelectedItem = null;
+                comboBox.Text = enteredText;
+                if (comboBox.IsKeyboardFocusWithin)
+                {
+                    comboBox.IsDropDownOpen = true;
+                }
+            }
+            finally
+            {
+                _suppressKontoSearch = false;
+            }
+
+            txtGlobalStatus.Text = konta.Count == 0
+                ? $"Nema konta koji počinju sa '{prefix}'."
+                : $"Pronađeno konta: {konta.Count}.";
+        }
+        catch (OperationCanceledException)
+        {
+            // Nova pretraga je zamijenila prethodnu.
+        }
+        catch (Exception ex)
+        {
+            txtGlobalStatus.Text = $"Pretraga konta nije uspjela: {ex.Message}";
+        }
     }
 
     private bool TryBuildInput(out PpAparatInput? input, out IReadOnlyList<string> errors)

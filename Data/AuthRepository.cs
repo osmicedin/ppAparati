@@ -20,6 +20,8 @@ public sealed class AuthRepository
         const string sql = """
             SELECT TOP (1)
                 ISNULL(CAST(korime AS nvarchar(100)), '') AS KorisnickoIme,
+                ISNULL(CAST(ime AS nvarchar(100)), '') AS Ime,
+                ISNULL(CAST(prezime AS nvarchar(100)), '') AS Prezime,
                 ISNULL(CAST(lozinka AS nvarchar(200)), '') AS Lozinka,
                 ISNULL(CAST(kriploz AS nvarchar(200)), '') AS LegacyLozinka,
                 CAST(
@@ -53,13 +55,17 @@ public sealed class AuthRepository
         return odgovara
             ? new AutentifikovaniKorisnik(
                 row.KorisnickoIme?.Trim() ?? username.Trim(),
-                row.KorisnickoIme?.Trim() ?? username.Trim())
+                row.KorisnickoIme?.Trim() ?? username.Trim(),
+                row.Ime?.Trim() ?? string.Empty,
+                row.Prezime?.Trim() ?? string.Empty)
             : null;
     }
 
     private sealed class AuthRow
     {
         public string? KorisnickoIme { get; init; }
+        public string? Ime { get; init; }
+        public string? Prezime { get; init; }
         public string? Lozinka { get; init; }
         public string? LegacyLozinka { get; init; }
         public bool Aktivan { get; init; }
