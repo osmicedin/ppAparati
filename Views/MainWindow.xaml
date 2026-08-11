@@ -1,0 +1,268 @@
+<Window x:Class="PpEvidencija.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Evidencija PP aparata"
+        Width="1380"
+        Height="850"
+        MinWidth="1120"
+        MinHeight="720"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="76" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="32" />
+        </Grid.RowDefinitions>
+
+        <Border Background="{StaticResource PrimaryBrush}">
+            <Grid Margin="28,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Evidencija PP aparata"
+                               Foreground="White"
+                               FontSize="24"
+                               FontWeight="Bold" />
+                    <TextBlock Text="Unos servisiranih aparata i mjesečni zapisnici"
+                               Foreground="#F8DEE4" />
+                </StackPanel>
+                <TextBlock x:Name="txtPrijavljeniKorisnik"
+                           Grid.Column="1"
+                           VerticalAlignment="Center"
+                           Foreground="White"
+                           FontWeight="SemiBold" />
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1" Margin="20,16,20,10">
+            <TabItem Header="Unos PP aparata">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Border Style="{StaticResource Card}" Margin="8">
+                        <Grid MaxWidth="1060" HorizontalAlignment="Left">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="Novi servisirani PP aparat"
+                                       FontSize="22"
+                                       FontWeight="Bold"
+                                       Foreground="#24272D" />
+                            <TextBlock Grid.Row="1"
+                                       Text="Sva polja su obavezna. Sljedeći servis računa se automatski šest mjeseci od datuma servisa."
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       Margin="0,4,0,18" />
+
+                            <Grid Grid.Row="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="330" />
+                                    <ColumnDefinition Width="28" />
+                                    <ColumnDefinition Width="330" />
+                                    <ColumnDefinition Width="28" />
+                                    <ColumnDefinition Width="330" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Konto / kupac *" />
+                                <ComboBox x:Name="cmbKontoUnos"
+                                          Grid.Row="1"
+                                          IsEditable="True"
+                                          IsTextSearchEnabled="True"
+                                          IsTextSearchCaseSensitive="False"
+                                          TextSearch.TextPath="Prikaz"
+                                          DisplayMemberPath="Prikaz" />
+
+                                <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Tip PP aparata *" />
+                                <TextBox x:Name="txtTip" Grid.Row="1" Grid.Column="2" MaxLength="50" />
+
+                                <TextBlock Grid.Column="4" Style="{StaticResource FieldLabel}" Text="Punjenje (kg) *" />
+                                <TextBox x:Name="txtPunjenje" Grid.Row="1" Grid.Column="4" MaxLength="12" />
+
+                                <TextBlock Grid.Row="2" Style="{StaticResource FieldLabel}" Text="Serijski broj aparata *" />
+                                <TextBox x:Name="txtSerijskiBroj" Grid.Row="3" MaxLength="100" />
+
+                                <TextBlock Grid.Row="2" Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Godina proizvodnje *" />
+                                <TextBox x:Name="txtGodinaProizvodnje" Grid.Row="3" Grid.Column="2" MaxLength="4" />
+
+                                <TextBlock Grid.Row="2" Grid.Column="4" Style="{StaticResource FieldLabel}" Text="Datum servisa *" />
+                                <DatePicker x:Name="dpDatumServisa"
+                                            Grid.Row="3"
+                                            Grid.Column="4"
+                                            SelectedDateChanged="DpDatumServisa_SelectedDateChanged" />
+
+                                <TextBlock Grid.Row="4" Style="{StaticResource FieldLabel}" Text="Sljedeći servis" />
+                                <Border Grid.Row="5"
+                                        Background="#ECEEF1"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="3"
+                                        Height="34"
+                                        Margin="0,4,0,10">
+                                    <TextBlock x:Name="txtSljedeciServis"
+                                               Margin="9,0"
+                                               VerticalAlignment="Center"
+                                               FontWeight="SemiBold" />
+                                </Border>
+
+                                <TextBlock Grid.Row="4" Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Konstatacija ispravnosti *" />
+                                <TextBox x:Name="txtKonstatacija" Grid.Row="5" Grid.Column="2" MaxLength="100" />
+
+                                <TextBlock Grid.Row="4" Grid.Column="4" Style="{StaticResource FieldLabel}" Text="Vozilo *" />
+                                <TextBox x:Name="txtVozilo" Grid.Row="5" Grid.Column="4" MaxLength="100" ToolTip="Ako nije primjenjivo unesite N/A." />
+                            </Grid>
+
+                            <Grid Grid.Row="3" Margin="0,2,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="330" />
+                                    <ColumnDefinition Width="28" />
+                                    <ColumnDefinition Width="330" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Ispitivanje izvršio *" />
+                                    <TextBox x:Name="txtIspitivanjeIzvrsio" MaxLength="150" />
+                                </StackPanel>
+                            </Grid>
+
+                            <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button x:Name="btnSnimi"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Content="Snimi aparat"
+                                        Click="BtnSnimi_Click" />
+                                <Button Content="Očisti polja" Click="BtnOcisti_Click" />
+                            </StackPanel>
+
+                            <TextBlock x:Name="txtUnosStatus"
+                                       Grid.Row="5"
+                                       Margin="0,14,0,0"
+                                       TextWrapping="Wrap"
+                                       FontWeight="SemiBold" />
+                        </Grid>
+                    </Border>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Izvještaji">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Border Style="{StaticResource Card}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="20" />
+                                <ColumnDefinition Width="1.1*" />
+                                <ColumnDefinition Width="20" />
+                                <ColumnDefinition Width="1.1*" />
+                                <ColumnDefinition Width="20" />
+                                <ColumnDefinition Width="1.3*" />
+                                <ColumnDefinition Width="20" />
+                                <ColumnDefinition Width="1.4*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.ColumnSpan="9"
+                                       Text="Mjesečni zapisnik"
+                                       FontSize="22"
+                                       FontWeight="Bold" />
+
+                            <StackPanel Grid.Row="1">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Konto / kupac *" />
+                                <ComboBox x:Name="cmbKontoIzvjestaj"
+                                          IsEditable="True"
+                                          IsTextSearchEnabled="True"
+                                          IsTextSearchCaseSensitive="False"
+                                          TextSearch.TextPath="Prikaz"
+                                          DisplayMemberPath="Prikaz" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Mjesec *" />
+                                <ComboBox x:Name="cmbMjesec" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="4">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Godina *" />
+                                <ComboBox x:Name="cmbGodina" IsEditable="True" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="6">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Broj zapisnika *" />
+                                <TextBox x:Name="txtBrojZapisnika" MaxLength="80" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="8">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Datum zaključivanja *" />
+                                <DatePicker x:Name="dpDatumZakljucivanja" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.ColumnSpan="9" Orientation="Horizontal">
+                                <Button x:Name="btnUcitajPregled"
+                                        Content="Učitaj pregled"
+                                        Click="BtnUcitajPregled_Click" />
+                                <Button x:Name="btnGenerisiDocx"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Content="Generiši DOCX"
+                                        Click="BtnGenerisiDocx_Click" />
+                                <Button x:Name="btnOtvoriWord"
+                                        Content="Otvori u Wordu"
+                                        IsEnabled="False"
+                                        Click="BtnOtvoriWord_Click" />
+                                <TextBlock x:Name="txtIzvjestajStatus"
+                                           Margin="12,12,0,0"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,14,0,0" Padding="10">
+                        <DataGrid x:Name="dgIzvjestaj"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  HeadersVisibility="Column"
+                                  GridLinesVisibility="Horizontal"
+                                  AlternatingRowBackground="#F5F6F8">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="R.br." Binding="{Binding RedniBroj}" Width="55" />
+                                <DataGridTextColumn Header="Tip" Binding="{Binding Tip}" Width="75" />
+                                <DataGridTextColumn Header="Punjenje kg" Binding="{Binding PunjenjeKg, StringFormat={}{0:0.##}}" Width="90" />
+                                <DataGridTextColumn Header="Serijski broj" Binding="{Binding SerijskiBroj}" Width="120" />
+                                <DataGridTextColumn Header="Godina" Binding="{Binding GodinaProizvodnje}" Width="75" />
+                                <DataGridTextColumn Header="Datum servisa" Binding="{Binding DatumServisa, StringFormat={}{0:dd.MM.yyyy}}" Width="105" />
+                                <DataGridTextColumn Header="Sljedeći servis" Binding="{Binding SljedeciServis, StringFormat={}{0:dd.MM.yyyy}}" Width="115" />
+                                <DataGridTextColumn Header="Ispravnost" Binding="{Binding KonstatacijaIspravnosti}" Width="120" />
+                                <DataGridTextColumn Header="Vozilo" Binding="{Binding Vozilo}" Width="120" />
+                                <DataGridTextColumn Header="Ispitivanje izvršio" Binding="{Binding IspitivanjeIzvrsio}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="2" Background="#E8E9EC" BorderBrush="#D0D2D7" BorderThickness="0,1,0,0">
+            <TextBlock x:Name="txtGlobalStatus"
+                       Margin="20,0"
+                       VerticalAlignment="Center"
+                       Foreground="{StaticResource MutedTextBrush}" />
+        </Border>
+    </Grid>
+</Window>

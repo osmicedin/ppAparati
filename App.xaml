@@ -1,0 +1,73 @@
+<Application x:Class="PpEvidencija.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <SolidColorBrush x:Key="PrimaryBrush" Color="#9B1C31" />
+        <SolidColorBrush x:Key="PrimaryDarkBrush" Color="#711323" />
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFDFB" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#D7D9DE" />
+        <SolidColorBrush x:Key="MutedTextBrush" Color="#5F6570" />
+
+        <Style TargetType="Window">
+            <Setter Property="FontFamily" Value="Segoe UI" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Background" Value="#F4F5F7" />
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="Margin" Value="0,4,0,10" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style TargetType="PasswordBox">
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="Margin" Value="0,4,0,10" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="Margin" Value="0,4,0,10" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style TargetType="DatePicker">
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Margin" Value="0,4,0,10" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="MinWidth" Value="110" />
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="Margin" Value="0,6,8,0" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryDarkBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#24272D" />
+        </Style>
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="22" />
+        </Style>
+    </Application.Resources>
+</Application>

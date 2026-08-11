@@ -1,0 +1,63 @@
+<Window x:Class="PpEvidencija.Views.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Prijava - Evidencija PP aparata"
+        Width="470"
+        Height="390"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        KeyDown="Window_KeyDown">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="115" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Background="{StaticResource PrimaryBrush}">
+            <StackPanel VerticalAlignment="Center" Margin="34,0">
+                <TextBlock Text="EVIDENCIJA PP APARATA"
+                           Foreground="White"
+                           FontSize="24"
+                           FontWeight="Bold" />
+                <TextBlock Text="Prijavite se postojećim korisničkim nalogom"
+                           Foreground="#F8DEE4"
+                           Margin="0,7,0,0" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="28,22,28,26">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Korisničko ime" />
+                <TextBox x:Name="txtKorisnickoIme" Grid.Row="1" MaxLength="100" />
+
+                <TextBlock Grid.Row="2" Style="{StaticResource FieldLabel}" Text="Lozinka" />
+                <PasswordBox x:Name="txtLozinka" Grid.Row="3" MaxLength="200" />
+
+                <Grid Grid.Row="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="txtStatus"
+                               VerticalAlignment="Center"
+                               Foreground="#A12637"
+                               TextWrapping="Wrap" />
+                    <Button x:Name="btnPrijava"
+                            Grid.Column="1"
+                            Style="{StaticResource PrimaryButton}"
+                            Content="Prijava"
+                            IsDefault="True"
+                            Click="BtnPrijava_Click" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

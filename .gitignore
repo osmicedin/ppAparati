@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+appsettings.json
+Izvjestaji/
+*.docx~
+~$*.docx
+template-work/
+/reference.docx
