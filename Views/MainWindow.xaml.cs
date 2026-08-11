@@ -13,6 +13,8 @@ namespace PpEvidencija.Views;
 
 public partial class MainWindow : Window
 {
+    private const string DefaultKontoPrefix = "211";
+
     private readonly AutentifikovaniKorisnik _korisnik;
     private readonly KontoRepository _kontoRepository;
     private readonly PpAparatRepository _ppAparatRepository;
@@ -80,7 +82,7 @@ public partial class MainWindow : Window
             cmbGodina.ItemsSource = years;
             cmbGodina.SelectedItem = DateTime.Today.Year;
 
-            txtGlobalStatus.Text = "Upišite početak broja konta za pretragu.";
+            txtGlobalStatus.Text = "Konto tražite po početku broja ili dijelu naziva kupca.";
         }
         catch (Exception ex)
         {
@@ -181,13 +183,21 @@ public partial class MainWindow : Window
 
     private async void KontoComboBox_DropDownOpened(object sender, EventArgs e)
     {
-        if (sender is ComboBox comboBox && comboBox.Items.Count == 0)
+        if (sender is not ComboBox comboBox || comboBox.Items.Count > 0)
         {
-            await SearchKontaAsync(comboBox, useDebounce: false);
+            return;
         }
+
+        var defaultSearch = string.IsNullOrWhiteSpace(comboBox.Text)
+            ? DefaultKontoPrefix
+            : null;
+        await SearchKontaAsync(comboBox, useDebounce: false, searchOverride: defaultSearch);
     }
 
-    private async Task SearchKontaAsync(ComboBox comboBox, bool useDebounce)
+    private async Task SearchKontaAsync(
+        ComboBox comboBox,
+        bool useDebounce,
+        string? searchOverride = null)
     {
         var cancellation = new CancellationTokenSource();
         if (ReferenceEquals(comboBox, cmbKontoUnos))
@@ -204,24 +214,49 @@ public partial class MainWindow : Window
         }
 
         var token = cancellation.Token;
-        var prefix = comboBox.Text.Trim();
+        var enteredText = comboBox.Text;
+        var searchText = (searchOverride ?? enteredText).Trim();
 
         try
         {
+            if (string.IsNullOrWhiteSpace(searchText))
+            {
+                _suppressKontoSearch = true;
+                try
+                {
+                    comboBox.ItemsSource = Array.Empty<Konto>();
+                    comboBox.SelectedItem = null;
+                    comboBox.Text = string.Empty;
+                    comboBox.IsDropDownOpen = false;
+                }
+                finally
+                {
+                    _suppressKontoSearch = false;
+                }
+
+                txtGlobalStatus.Text = "Upišite početak broja konta ili dio naziva kupca.";
+                return;
+            }
+
             if (useDebounce)
             {
                 await Task.Delay(250, token);
             }
 
-            var konta = await _kontoRepository.SearchByPrefixAsync(prefix, cancellationToken: token);
+            var konta = await _kontoRepository.SearchAsync(searchText, cancellationToken: token);
             token.ThrowIfCancellationRequested();
 
-            if (!string.Equals(prefix, comboBox.Text.Trim(), StringComparison.Ordinal))
+            if (searchOverride is null
+                && !string.Equals(searchText, comboBox.Text.Trim(), StringComparison.Ordinal))
             {
                 return;
             }
 
-            var enteredText = comboBox.Text;
+            if (searchOverride is not null && !string.IsNullOrWhiteSpace(comboBox.Text))
+            {
+                return;
+            }
+
             _suppressKontoSearch = true;
             try
             {
@@ -239,8 +274,10 @@ public partial class MainWindow : Window
             }
 
             txtGlobalStatus.Text = konta.Count == 0
-                ? $"Nema konta koji počinju sa '{prefix}'."
-                : $"Pronađeno konta: {konta.Count}.";
+                ? $"Nema konta ni naziva za pretragu '{searchText}'."
+                : searchOverride is not null
+                    ? $"Prikazana početna konta {DefaultKontoPrefix}%."
+                    : $"Pronađeno konta: {konta.Count}.";
         }
         catch (OperationCanceledException)
         {

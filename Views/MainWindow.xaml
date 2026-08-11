@@ -83,6 +83,7 @@
                                           IsTextSearchEnabled="False"
                                           StaysOpenOnEdit="True"
                                           DropDownOpened="KontoComboBox_DropDownOpened"
+                                          ToolTip="Upišite početak broja konta ili dio naziva kupca."
                                           DisplayMemberPath="Prikaz" />
 
                                 <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Tip PP aparata *" />
@@ -193,6 +194,7 @@
                                           IsTextSearchEnabled="False"
                                           StaysOpenOnEdit="True"
                                           DropDownOpened="KontoComboBox_DropDownOpened"
+                                          ToolTip="Upišite početak broja konta ili dio naziva kupca."
                                           DisplayMemberPath="Prikaz" />
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="2">

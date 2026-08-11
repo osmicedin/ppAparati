@@ -66,7 +66,7 @@ public partial class App : System.Windows.Application
         var sampleRows = Enumerable.Range(1, 72)
             .Select(index =>
             {
-                var serviceDate = new DateTime(2026, 7, 1).AddDays((index - 1) % 28);
+                var serviceDate = new DateTime(2026, 7, 9).AddDays((index - 1) % 17);
                 return new PpAparatRecord
                 {
                     Id = index,

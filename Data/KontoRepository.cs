@@ -12,22 +12,34 @@ public sealed class KontoRepository
         _connectionFactory = connectionFactory;
     }
 
-    public async Task<IReadOnlyList<Konto>> SearchByPrefixAsync(
-        string kontoPrefix,
+    public async Task<IReadOnlyList<Konto>> SearchAsync(
+        string searchText,
         int maxResults = 100,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            return [];
+        }
+
         const string sql = """
-            SELECT DISTINCT TOP (@maxResults)
-                LTRIM(RTRIM(CAST(konto AS nvarchar(20)))) AS Sifra,
-                LTRIM(RTRIM(CAST(naziv AS nvarchar(255)))) AS Naziv
-            FROM dbo.konta
-            WHERE LEN(LTRIM(RTRIM(CAST(konto AS nvarchar(20))))) > 0
-              AND LTRIM(RTRIM(CAST(konto AS nvarchar(20)))) LIKE @kontoPattern ESCAPE N'~'
-            ORDER BY Sifra, Naziv;
+            SELECT TOP (@maxResults)
+                filtrirano.Sifra,
+                filtrirano.Naziv
+            FROM
+            (
+                SELECT DISTINCT
+                    LTRIM(RTRIM(CAST(konto AS nvarchar(20)))) AS Sifra,
+                    LTRIM(RTRIM(CAST(naziv AS nvarchar(255)))) AS Naziv
+                FROM dbo.konta
+                WHERE LEN(LTRIM(RTRIM(CAST(konto AS nvarchar(20))))) > 0
+            ) AS filtrirano
+            WHERE filtrirano.Sifra LIKE @kontoPattern ESCAPE N'~'
+               OR filtrirano.Naziv LIKE @nazivPattern ESCAPE N'~'
+            ORDER BY filtrirano.Sifra, filtrirano.Naziv;
             """;
 
-        var escapedPrefix = kontoPrefix
+        var escapedSearchText = searchText
             .Trim()
             .Replace("~", "~~", StringComparison.Ordinal)
             .Replace("%", "~%", StringComparison.Ordinal)
@@ -40,7 +52,8 @@ public sealed class KontoRepository
             new
             {
                 maxResults = Math.Clamp(maxResults, 1, 200),
-                kontoPattern = $"{escapedPrefix}%"
+                kontoPattern = $"{escapedSearchText}%",
+                nazivPattern = $"%{escapedSearchText}%"
             },
             cancellationToken: cancellationToken));
         return rows.AsList();

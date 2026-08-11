@@ -53,7 +53,12 @@ public sealed class DocxReportService : IDocxReportService
             ?? throw new InvalidDataException("DOCX predložak nema glavni dio dokumenta.");
 
         var from = request.Aparati.Min(item => item.DatumServisa).Date;
-        var to = request.Aparati.Max(item => item.DatumServisa).Date;
+        var to = request.DatumZakljucivanja.Date;
+        if (to < from)
+        {
+            throw new InvalidOperationException(
+                "Datum zaključivanja ne može biti prije prvog datuma servisa u izvještaju.");
+        }
 
         SetContentControlText(mainPart, "ReportNumber", request.BrojZapisnika.Trim());
         SetContentControlText(mainPart, "ConclusionDate", FormatDate(request.DatumZakljucivanja, includeSuffix: true));

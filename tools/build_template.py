@@ -280,14 +280,14 @@ def replace_table(document) -> None:
 
     new_table.cell(0, 0).merge(new_table.cell(1, 0))
     new_table.cell(0, 1).merge(new_table.cell(0, 9))
-    set_cell_text(new_table.cell(0, 0), "Redni\nbroj", bold=True)
+    set_cell_text(new_table.cell(0, 0), "Rb.", bold=True)
     set_cell_text(new_table.cell(0, 1), "Identifikacioni podaci aparata", bold=True, size=8)
 
     headers = [
         "Tip",
         "Punjenje\nkg",
         "Serijski broj\naparata",
-        "Godina\nproizvodnje",
+        "GP",
         "Datum\nservisa",
         "Sljedeći\nservis",
         "Konstatacija\nispravnosti",
