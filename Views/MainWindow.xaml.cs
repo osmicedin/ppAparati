@@ -46,7 +46,7 @@ public partial class MainWindow : Window
         txtGodinaProizvodnje.Text = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
         txtKonstatacija.Text = "Ispravan";
         txtIspitivanjeIzvrsio.Text = _korisnik.PunoIme;
-        cmbTip.ItemsSource = new[] { "S6", "S3" };
+        cmbTip.ItemsSource = new[] { "S 1", "S 2", "S 3", "S 6", "S 9", "Co2", "S 50" };
 
         cmbKontoUnos.AddHandler(
             TextBoxBase.TextChangedEvent,
