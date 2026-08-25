@@ -137,6 +137,7 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<AuthRepository>();
                 services.AddSingleton<KontoRepository>();
                 services.AddSingleton<PpAparatRepository>();
+                services.AddSingleton<IzvjestajEvidencijaRepository>();
                 services.AddSingleton<PpAparatValidator>();
                 services.AddSingleton<IDocxReportService, DocxReportService>();
                 services.AddTransient<LoginWindow>();

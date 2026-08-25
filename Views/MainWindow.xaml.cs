@@ -18,18 +18,25 @@ public partial class MainWindow : Window
     private readonly AutentifikovaniKorisnik _korisnik;
     private readonly KontoRepository _kontoRepository;
     private readonly PpAparatRepository _ppAparatRepository;
+    private readonly IzvjestajEvidencijaRepository _izvjestajEvidencijaRepository;
     private readonly PpAparatValidator _validator;
     private readonly IDocxReportService _docxReportService;
     private IReadOnlyList<PpAparatRecord> _trenutniIzvjestaj = [];
+    private IzvjestajPregledRed? _odabraniPregled;
     private string? _zadnjiDocxPath;
     private CancellationTokenSource? _kontoUnosSearchCancellation;
-    private CancellationTokenSource? _kontoIzvjestajSearchCancellation;
+    private CancellationTokenSource? _pregledKontaCancellation;
+    private CancellationTokenSource? _detaljiIzvjestajaCancellation;
     private bool _suppressKontoSearch;
+    private bool _reportFiltersReady;
+    private int _pregledMjesec;
+    private int _pregledGodina;
 
     public MainWindow(
         AutentifikovaniKorisnik korisnik,
         KontoRepository kontoRepository,
         PpAparatRepository ppAparatRepository,
+        IzvjestajEvidencijaRepository izvjestajEvidencijaRepository,
         PpAparatValidator validator,
         IDocxReportService docxReportService)
     {
@@ -37,6 +44,7 @@ public partial class MainWindow : Window
         _korisnik = korisnik;
         _kontoRepository = kontoRepository;
         _ppAparatRepository = ppAparatRepository;
+        _izvjestajEvidencijaRepository = izvjestajEvidencijaRepository;
         _validator = validator;
         _docxReportService = docxReportService;
 
@@ -51,12 +59,11 @@ public partial class MainWindow : Window
         cmbKontoUnos.AddHandler(
             TextBoxBase.TextChangedEvent,
             new TextChangedEventHandler(KontoComboBox_TextChanged));
-        cmbKontoIzvjestaj.AddHandler(
-            TextBoxBase.TextChangedEvent,
-            new TextChangedEventHandler(KontoComboBox_TextChanged));
 
         cmbMjesec.ItemsSource = KreirajMjesece();
         cmbMjesec.SelectedIndex = DateTime.Today.Month - 1;
+        cmbStatusIzvjestaja.ItemsSource = KreirajStatusFiltere();
+        cmbStatusIzvjestaja.SelectedIndex = 0;
 
         Loaded += MainWindow_Loaded;
     }
@@ -83,7 +90,8 @@ public partial class MainWindow : Window
             cmbGodina.ItemsSource = years;
             cmbGodina.SelectedItem = DateTime.Today.Year;
 
-            txtGlobalStatus.Text = "Konto tražite po početku broja ili dijelu naziva kupca.";
+            _reportFiltersReady = true;
+            await UcitajPregledKontaAsync();
         }
         catch (Exception ex)
         {
@@ -201,18 +209,9 @@ public partial class MainWindow : Window
         string? searchOverride = null)
     {
         var cancellation = new CancellationTokenSource();
-        if (ReferenceEquals(comboBox, cmbKontoUnos))
-        {
-            _kontoUnosSearchCancellation?.Cancel();
-            _kontoUnosSearchCancellation?.Dispose();
-            _kontoUnosSearchCancellation = cancellation;
-        }
-        else
-        {
-            _kontoIzvjestajSearchCancellation?.Cancel();
-            _kontoIzvjestajSearchCancellation?.Dispose();
-            _kontoIzvjestajSearchCancellation = cancellation;
-        }
+        _kontoUnosSearchCancellation?.Cancel();
+        _kontoUnosSearchCancellation?.Dispose();
+        _kontoUnosSearchCancellation = cancellation;
 
         var token = cancellation.Token;
         var enteredText = comboBox.Text;
@@ -343,22 +342,201 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private async void BtnUcitajPregled_Click(object sender, RoutedEventArgs e)
+    private async void ReportFilter_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!TryGetReportFilter(out var konto, out var month, out var year, out var error))
+        if (_reportFiltersReady)
         {
-            MessageBox.Show(error, "Provjera podataka", MessageBoxButton.OK, MessageBoxImage.Warning);
+            await UcitajPregledKontaAsync();
+        }
+    }
+
+    private async void BtnOsvjeziPregledKonta_Click(object sender, RoutedEventArgs e)
+    {
+        await UcitajPregledKontaAsync(_odabraniPregled?.Konto);
+    }
+
+    private async Task UcitajPregledKontaAsync(string? zadrziKonto = null)
+    {
+        if (!TryGetOverviewFilter(out var month, out var year, out var statusFilter, out var error))
+        {
+            txtPregledKontaStatus.Text = error;
+            ClearSelectedReport();
             return;
         }
 
-        btnUcitajPregled.IsEnabled = false;
+        var cancellation = new CancellationTokenSource();
+        _pregledKontaCancellation?.Cancel();
+        _pregledKontaCancellation?.Dispose();
+        _pregledKontaCancellation = cancellation;
+        var token = cancellation.Token;
+
+        btnOsvjeziPregledKonta.IsEnabled = false;
+        txtPregledKontaStatus.Text = "Učitavanje kupaca...";
+
         try
         {
-            await UcitajIzvjestajAsync(konto!, month, year);
+            var rows = await _izvjestajEvidencijaRepository.GetPregledAsync(
+                month,
+                year,
+                statusFilter,
+                token);
+            token.ThrowIfCancellationRequested();
+
+            _pregledMjesec = month;
+            _pregledGodina = year;
+            dgKontaIzvjestaji.ItemsSource = rows;
+
+            var rowToKeep = string.IsNullOrWhiteSpace(zadrziKonto)
+                ? null
+                : rows.FirstOrDefault(row => string.Equals(
+                    row.Konto,
+                    zadrziKonto,
+                    StringComparison.Ordinal));
+
+            if (rowToKeep is null)
+            {
+                dgKontaIzvjestaji.SelectedItem = null;
+                ClearSelectedReport();
+            }
+            else
+            {
+                dgKontaIzvjestaji.SelectedItem = rowToKeep;
+                dgKontaIzvjestaji.ScrollIntoView(rowToKeep);
+            }
+
+            txtPregledKontaStatus.Text = rows.Count == 0
+                ? "Nema kupaca za odabrani period i status."
+                : $"Prikazano kupaca: {rows.Count}.";
+            txtGlobalStatus.Text = $"Učitan je pregled za {month:00}/{year}.";
+        }
+        catch (OperationCanceledException)
+        {
+            // Nova promjena filtera je zamijenila prethodno učitavanje.
+        }
+        catch (Exception ex)
+        {
+            dgKontaIzvjestaji.ItemsSource = null;
+            ClearSelectedReport();
+            txtPregledKontaStatus.Text = "Pregled kupaca nije učitan.";
+            txtGlobalStatus.Text = "Greška pri učitavanju mjesečne evidencije.";
+            MessageBox.Show(
+                $"Nije moguće učitati mjesečnu evidenciju.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
+                "Greška baze",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
         finally
         {
-            btnUcitajPregled.IsEnabled = true;
+            if (ReferenceEquals(_pregledKontaCancellation, cancellation))
+            {
+                btnOsvjeziPregledKonta.IsEnabled = true;
+            }
+        }
+    }
+
+    private async void DgKontaIzvjestaji_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (dgKontaIzvjestaji.SelectedItem is not IzvjestajPregledRed selected)
+        {
+            ClearSelectedReport();
+            return;
+        }
+
+        _odabraniPregled = selected;
+        txtOdabraniKupac.Text = selected.Kupac.Prikaz;
+        btnPromijeniStatus.Content = selected.Zakljucen
+            ? "Ponovo otvori period"
+            : "Zaključi period";
+        btnPromijeniStatus.IsEnabled = true;
+        btnGenerisiDocx.IsEnabled = true;
+
+        var cancellation = new CancellationTokenSource();
+        _detaljiIzvjestajaCancellation?.Cancel();
+        _detaljiIzvjestajaCancellation?.Dispose();
+        _detaljiIzvjestajaCancellation = cancellation;
+
+        try
+        {
+            await UcitajIzvjestajAsync(
+                selected.Kupac,
+                _pregledMjesec,
+                _pregledGodina,
+                cancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Izabran je drugi kupac prije završetka učitavanja.
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(_odabraniPregled, selected))
+            {
+                _trenutniIzvjestaj = [];
+                dgIzvjestaj.ItemsSource = null;
+                txtIzvjestajStatus.Text = "Podaci kupca nisu učitani.";
+                MessageBox.Show(
+                    $"Nije moguće učitati aparate odabranog kupca.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
+                    "Greška baze",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+    }
+
+    private async void BtnPromijeniStatus_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = _odabraniPregled;
+        if (selected is null)
+        {
+            MessageBox.Show(
+                "Odaberite kupca iz tabele.",
+                "Mjesečna evidencija",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var noviStatus = !selected.Zakljucen;
+        var actionText = noviStatus ? "zaključiti" : "ponovo otvoriti";
+        var confirmation = MessageBox.Show(
+            $"Da li želite {actionText} period {_pregledMjesec:00}/{_pregledGodina} za kupca:{Environment.NewLine}{selected.Kupac.Prikaz}?",
+            noviStatus ? "Zaključivanje perioda" : "Ponovno otvaranje perioda",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question,
+            MessageBoxResult.No);
+
+        if (confirmation != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        btnPromijeniStatus.IsEnabled = false;
+        btnGenerisiDocx.IsEnabled = false;
+        txtGlobalStatus.Text = noviStatus ? "Zaključivanje perioda..." : "Ponovno otvaranje perioda...";
+
+        try
+        {
+            await _izvjestajEvidencijaRepository.PromijeniStatusAsync(
+                selected.Konto,
+                _pregledMjesec,
+                _pregledGodina,
+                selected.Zakljucen,
+                noviStatus,
+                _korisnik.KorisnickoIme);
+
+            await UcitajPregledKontaAsync(selected.Konto);
+            txtGlobalStatus.Text = noviStatus
+                ? "Period je uspješno zaključen."
+                : "Period je uspješno ponovo otvoren.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Status perioda nije promijenjen.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
+                "Mjesečna evidencija",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            await UcitajPregledKontaAsync(selected.Konto);
         }
     }
 
@@ -440,7 +618,7 @@ public partial class MainWindow : Window
         }
         finally
         {
-            btnGenerisiDocx.IsEnabled = true;
+            btnGenerisiDocx.IsEnabled = _odabraniPregled is not null;
         }
     }
 
@@ -470,10 +648,19 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task UcitajIzvjestajAsync(Konto konto, int month, int year)
+    private async Task UcitajIzvjestajAsync(
+        Konto konto,
+        int month,
+        int year,
+        CancellationToken cancellationToken = default)
     {
         txtIzvjestajStatus.Text = "Učitavanje podataka...";
-        _trenutniIzvjestaj = await _ppAparatRepository.GetForReportAsync(konto.Sifra, month, year);
+        _trenutniIzvjestaj = await _ppAparatRepository.GetForReportAsync(
+            konto.Sifra,
+            month,
+            year,
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         dgIzvjestaj.ItemsSource = _trenutniIzvjestaj
             .Select((item, index) => new IzvjestajRed(index + 1, item))
             .ToList();
@@ -488,22 +675,20 @@ public partial class MainWindow : Window
         out int year,
         out string error)
     {
-        konto = cmbKontoIzvjestaj.SelectedItem as Konto;
-        month = (cmbMjesec.SelectedItem as MjesecStavka)?.Broj ?? 0;
+        konto = _odabraniPregled?.Kupac;
+        month = _pregledMjesec;
+        year = _pregledGodina;
         error = string.Empty;
 
-        var yearText = cmbGodina.Text.Trim();
-        if (!int.TryParse(yearText, NumberStyles.Integer, CultureInfo.InvariantCulture, out year)
-            || year is < 1900 or > 9999)
+        if (konto is null)
         {
-            error = "Odaberite ispravnu godinu.";
+            error = "Odaberite kupca iz tabele mjesečne evidencije.";
             return false;
         }
 
-        if (konto is null
-            || !string.Equals(cmbKontoIzvjestaj.Text.Trim(), konto.Prikaz, StringComparison.Ordinal))
+        if (year is < 1900 or > 9999)
         {
-            error = "Odaberite konto iz liste.";
+            error = "Osvježite pregled za ispravnu godinu.";
             return false;
         }
 
@@ -516,14 +701,66 @@ public partial class MainWindow : Window
         return true;
     }
 
+    private bool TryGetOverviewFilter(
+        out int month,
+        out int year,
+        out IzvjestajStatusFilter statusFilter,
+        out string error)
+    {
+        month = (cmbMjesec.SelectedItem as MjesecStavka)?.Broj ?? 0;
+        year = cmbGodina.SelectedItem is int selectedYear ? selectedYear : 0;
+        statusFilter = (cmbStatusIzvjestaja.SelectedItem as IzvjestajStatusFilterStavka)?.Vrijednost
+            ?? IzvjestajStatusFilter.Nezakljuceni;
+        error = string.Empty;
+
+        if (month is < 1 or > 12)
+        {
+            error = "Odaberite mjesec.";
+            return false;
+        }
+
+        if (year is < 1900 or > 9999)
+        {
+            error = "Odaberite ispravnu godinu.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ClearSelectedReport()
+    {
+        _detaljiIzvjestajaCancellation?.Cancel();
+        _odabraniPregled = null;
+        _trenutniIzvjestaj = [];
+        dgIzvjestaj.ItemsSource = null;
+        txtOdabraniKupac.Text = "Odaberite kupca iz gornje tabele.";
+        txtIzvjestajStatus.Text = string.Empty;
+        btnPromijeniStatus.Content = "Zaključi period";
+        btnPromijeniStatus.IsEnabled = false;
+        btnGenerisiDocx.IsEnabled = false;
+    }
+
     private async Task OsvjeziGodineAsync(int newYear)
     {
         var years = (cmbGodina.ItemsSource as IEnumerable<int>)?.ToList() ?? [];
         if (!years.Contains(newYear))
         {
+            var selectedYear = cmbGodina.SelectedItem is int currentYear
+                ? currentYear
+                : DateTime.Today.Year;
             years.Add(newYear);
             years.Sort((left, right) => right.CompareTo(left));
-            cmbGodina.ItemsSource = years;
+            _reportFiltersReady = false;
+            try
+            {
+                cmbGodina.ItemsSource = years;
+                cmbGodina.SelectedItem = selectedYear;
+            }
+            finally
+            {
+                _reportFiltersReady = true;
+            }
         }
 
         await Task.CompletedTask;
@@ -558,6 +795,13 @@ public partial class MainWindow : Window
         new(10, "Oktobar"),
         new(11, "Novembar"),
         new(12, "Decembar")
+    ];
+
+    private static IReadOnlyList<IzvjestajStatusFilterStavka> KreirajStatusFiltere() =>
+    [
+        new(IzvjestajStatusFilter.Nezakljuceni, "Nezaključeni"),
+        new(IzvjestajStatusFilter.Zakljuceni, "Zaključeni"),
+        new(IzvjestajStatusFilter.Svi, "Svi")
     ];
 
     private static string SafeFileName(string value)

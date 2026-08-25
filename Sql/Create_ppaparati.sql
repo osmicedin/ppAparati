@@ -50,3 +50,63 @@ BEGIN
         );
 END;
 GO
+
+IF OBJECT_ID(N'dbo.ppizvjestaji_status', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.ppizvjestaji_status
+    (
+        id BIGINT IDENTITY(1, 1) NOT NULL
+            CONSTRAINT PK_ppizvjestaji_status PRIMARY KEY,
+        konto VARCHAR(20) NOT NULL,
+        godina SMALLINT NOT NULL,
+        mjesec TINYINT NOT NULL,
+        zakljucen BIT NOT NULL,
+        posljednja_radnja CHAR(1) NOT NULL,
+        promijenio_korisnik NVARCHAR(100) NOT NULL,
+        promijenjeno_utc DATETIMEOFFSET(0) NOT NULL,
+
+        CONSTRAINT UQ_ppizvjestaji_status_period
+            UNIQUE (konto, godina, mjesec),
+        CONSTRAINT CK_ppizvjestaji_status_konto_not_blank
+            CHECK (LEN(LTRIM(RTRIM(konto))) > 0),
+        CONSTRAINT CK_ppizvjestaji_status_godina
+            CHECK (godina BETWEEN 1900 AND 9999),
+        CONSTRAINT CK_ppizvjestaji_status_mjesec
+            CHECK (mjesec BETWEEN 1 AND 12),
+        CONSTRAINT CK_ppizvjestaji_status_radnja
+            CHECK (posljednja_radnja IN ('Z', 'O')),
+        CONSTRAINT CK_ppizvjestaji_status_stanje_radnja
+            CHECK (
+                (zakljucen = 1 AND posljednja_radnja = 'Z')
+                OR (zakljucen = 0 AND posljednja_radnja = 'O')
+            ),
+        CONSTRAINT CK_ppizvjestaji_status_korisnik_not_blank
+            CHECK (LEN(LTRIM(RTRIM(promijenio_korisnik))) > 0)
+    );
+END;
+GO
+
+IF OBJECT_ID(N'dbo.ppizvjestaji_status_audit', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.ppizvjestaji_status_audit
+    (
+        id BIGINT IDENTITY(1, 1) NOT NULL
+            CONSTRAINT PK_ppizvjestaji_status_audit PRIMARY KEY,
+        status_id BIGINT NOT NULL,
+        radnja CHAR(1) NOT NULL,
+        korisnicko_ime NVARCHAR(100) NOT NULL,
+        dogadjaj_utc DATETIMEOFFSET(0) NOT NULL,
+
+        CONSTRAINT FK_ppizvjestaji_status_audit_status
+            FOREIGN KEY (status_id)
+            REFERENCES dbo.ppizvjestaji_status (id),
+        CONSTRAINT CK_ppizvjestaji_status_audit_radnja
+            CHECK (radnja IN ('Z', 'O')),
+        CONSTRAINT CK_ppizvjestaji_status_audit_korisnik_not_blank
+            CHECK (LEN(LTRIM(RTRIM(korisnicko_ime))) > 0)
+    );
+
+    CREATE INDEX IX_ppizvjestaji_status_audit_status_dogadjaj
+        ON dbo.ppizvjestaji_status_audit (status_id, dogadjaj_utc DESC);
+END;
+GO

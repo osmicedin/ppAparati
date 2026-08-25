@@ -50,9 +50,23 @@ public sealed class PpAparatRepository
             );
             """;
 
+        const string periodClosedSql = """
+            SELECT CAST(
+                CASE WHEN EXISTS
+                (
+                    SELECT 1
+                    FROM dbo.ppizvjestaji_status WITH (UPDLOCK, HOLDLOCK)
+                    WHERE konto = @konto
+                      AND godina = @year
+                      AND mjesec = @month
+                      AND zakljucen = 1
+                ) THEN 1 ELSE 0 END
+                AS bit);
+            """;
+
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(
-            IsolationLevel.ReadCommitted,
+            IsolationLevel.Serializable,
             cancellationToken);
 
         var accountCount = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
@@ -64,6 +78,23 @@ public sealed class PpAparatRepository
         if (accountCount == 0)
         {
             throw new InvalidOperationException("Odabrani konto više ne postoji u tabeli konta.");
+        }
+
+        var periodClosed = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            periodClosedSql,
+            new
+            {
+                konto = input.Konto,
+                year = input.DatumServisa.Year,
+                month = input.DatumServisa.Month
+            },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (periodClosed)
+        {
+            throw new InvalidOperationException(
+                "Izvještaj za odabrani konto i mjesec je zaključen. Prvo ponovo otvorite period u kartici Izvještaji.");
         }
 
         var id = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
