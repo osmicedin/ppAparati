@@ -25,5 +25,9 @@ public sealed class IzvjestajPregledRed
         ? vrijeme.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture)
         : string.Empty;
 
+    public string PosljednjaPromjenaPrikaz => string.IsNullOrWhiteSpace(PosljednjaRadnja)
+        ? "Nije mijenjano"
+        : $"{PosljednjaRadnja} · {PromijenioKorisnik} · {PromijenjenoPrikaz}";
+
     public Konto Kupac => new(Konto, NazivKupca);
 }

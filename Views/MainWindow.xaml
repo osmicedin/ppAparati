@@ -220,11 +220,46 @@
             </TabItem>
 
             <TabItem Header="Izvještaji">
-                <Grid Margin="2,12,2,4">
+                <TabItem.Resources>
+                    <SolidColorBrush x:Key="ReportOpenBackgroundBrush" Color="#FFF4E5" />
+                    <SolidColorBrush x:Key="ReportOpenForegroundBrush" Color="#8A4B08" />
+                    <SolidColorBrush x:Key="ReportClosedBackgroundBrush" Color="#E8F5EC" />
+                    <SolidColorBrush x:Key="ReportClosedForegroundBrush" Color="#1F6B3A" />
+
+                    <Style x:Key="ReportInlineLabel" TargetType="TextBlock">
+                        <Setter Property="Margin" Value="0,0,9,0" />
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                        <Setter Property="FontSize" Value="12" />
+                        <Setter Property="FontWeight" Value="SemiBold" />
+                    </Style>
+
+                    <Style x:Key="ReportCenteredCell"
+                           TargetType="DataGridCell"
+                           BasedOn="{StaticResource {x:Type DataGridCell}}">
+                        <Setter Property="HorizontalContentAlignment" Value="Center" />
+                        <Setter Property="VerticalContentAlignment" Value="Center" />
+                    </Style>
+
+                    <Style x:Key="ReportCenteredHeader"
+                           TargetType="DataGridColumnHeader"
+                           BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                        <Setter Property="HorizontalContentAlignment" Value="Center" />
+                        <Setter Property="VerticalContentAlignment" Value="Center" />
+                    </Style>
+
+                    <Style TargetType="{x:Type DatePickerTextBox}">
+                        <Setter Property="Padding" Value="9,0" />
+                        <Setter Property="VerticalContentAlignment" Value="Center" />
+                        <Setter Property="HorizontalContentAlignment" Value="Left" />
+                    </Style>
+                </TabItem.Resources>
+
+                <Grid Margin="2,10,2,4">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="43*" />
-                        <RowDefinition Height="14" />
-                        <RowDefinition Height="57*" />
+                        <RowDefinition Height="4*" />
+                        <RowDefinition Height="10" />
+                        <RowDefinition Height="6*" />
                     </Grid.RowDefinitions>
 
                     <Border Padding="0"
@@ -232,115 +267,173 @@
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <Border Padding="22,14"
+                            <Border Padding="16,9"
+                                    Background="{StaticResource SurfaceMutedBrush}"
                                     BorderBrush="#E4E6E9"
                                     BorderThickness="0,0,0,1">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <TextBlock Style="{StaticResource SectionKicker}"
-                                                   Text="MJESEČNA EVIDENCIJA" />
-                                        <TextBlock Margin="0,2,0,0"
-                                                   FontSize="18"
-                                                   FontWeight="SemiBold"
-                                                   Text="Kupci / konta sa servisiranim aparatima" />
+                                    <TextBlock VerticalAlignment="Center"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               Text="Kupci / konta" />
+                                    <StackPanel Grid.Column="1"
+                                                Margin="24,0,16,0"
+                                                VerticalAlignment="Center">
+                                        <StackPanel VerticalAlignment="Center"
+                                                    Orientation="Horizontal">
+                                            <TextBlock Style="{StaticResource ReportInlineLabel}"
+                                                       Text="Period" />
+                                            <ComboBox x:Name="cmbMjesec"
+                                                      Width="140"
+                                                      VerticalContentAlignment="Center"
+                                                      SelectionChanged="ReportFilter_SelectionChanged" />
+                                            <ComboBox x:Name="cmbGodina"
+                                                      Width="100"
+                                                      Margin="7,0,0,0"
+                                                      VerticalContentAlignment="Center"
+                                                      SelectionChanged="ReportFilter_SelectionChanged" />
+                                            <Border Width="1"
+                                                    Height="24"
+                                                    Margin="16,0"
+                                                    Background="{StaticResource BorderBrush}" />
+                                            <TextBlock Style="{StaticResource ReportInlineLabel}"
+                                                       Text="Status" />
+                                            <ComboBox x:Name="cmbStatusIzvjestaja"
+                                                      Width="160"
+                                                      VerticalContentAlignment="Center"
+                                                      SelectionChanged="ReportFilter_SelectionChanged" />
+                                            <Button x:Name="btnOsvjeziPregledKonta"
+                                                    MinWidth="88"
+                                                    Margin="10,0,0,0"
+                                                    VerticalAlignment="Center"
+                                                    Content="Osvježi"
+                                                    ToolTip="Ponovo učitaj podatke iz baze."
+                                                    Click="BtnOsvjeziPregledKonta_Click" />
+                                        </StackPanel>
                                     </StackPanel>
                                     <TextBlock x:Name="txtPregledKontaStatus"
-                                               Grid.Column="1"
-                                               MaxWidth="440"
-                                               Margin="20,0,0,0"
+                                               Grid.Column="2"
+                                               MaxWidth="180"
                                                VerticalAlignment="Center"
                                                Foreground="{StaticResource MutedTextBrush}"
+                                               FontSize="12"
                                                FontWeight="SemiBold"
                                                TextWrapping="Wrap" />
                                 </Grid>
                             </Border>
 
-                            <Grid Grid.Row="1"
-                                  Margin="22,12,22,12">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="1*" />
-                                    <ColumnDefinition Width="14" />
-                                    <ColumnDefinition Width="1*" />
-                                    <ColumnDefinition Width="14" />
-                                    <ColumnDefinition Width="1.35*" />
-                                    <ColumnDefinition Width="14" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+                            <Grid Grid.Row="1">
+                                <DataGrid x:Name="dgKontaIzvjestaji"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          CanUserAddRows="False"
+                                          HeadersVisibility="Column"
+                                          GridLinesVisibility="Horizontal"
+                                          AlternationCount="2"
+                                          AlternatingRowBackground="{StaticResource SurfaceMutedBrush}"
+                                          RowHeight="38"
+                                          ColumnHeaderHeight="36"
+                                          CellStyle="{StaticResource ReportCenteredCell}"
+                                          ColumnHeaderStyle="{StaticResource ReportCenteredHeader}"
+                                          SelectionChanged="DgKontaIzvjestaji_SelectionChanged"
+                                          ToolTip="Kliknite red kupca da otvorite detalje izvještaja.">
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="DataGridRow"
+                                               BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                            <Setter Property="Cursor" Value="Hand" />
+                                        </Style>
+                                    </DataGrid.RowStyle>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Konto"
+                                                            Binding="{Binding Konto}"
+                                                            Width="115" />
+                                        <DataGridTextColumn Header="Kupac"
+                                                            Binding="{Binding NazivKupca}"
+                                                            Width="2*" />
+                                        <DataGridTextColumn Header="Aparati"
+                                                            Binding="{Binding BrojAparata}"
+                                                            Width="80" />
+                                        <DataGridTemplateColumn Header="Status"
+                                                                Width="125">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <Border HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center"
+                                                            Padding="9,3"
+                                                            CornerRadius="12">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="{StaticResource ReportOpenBackgroundBrush}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Zakljucen}" Value="True">
+                                                                        <Setter Property="Background" Value="{StaticResource ReportClosedBackgroundBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock FontSize="12"
+                                                                   FontWeight="SemiBold"
+                                                                   Text="{Binding Status}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{StaticResource ReportOpenForegroundBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Zakljucen}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{StaticResource ReportClosedForegroundBrush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="Posljednja promjena"
+                                                            Binding="{Binding PosljednjaPromjenaPrikaz}"
+                                                            Width="260" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
 
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource FieldLabel}"
-                                               Text="Mjesec" />
-                                    <ComboBox x:Name="cmbMjesec"
-                                              SelectionChanged="ReportFilter_SelectionChanged" />
+                                <StackPanel x:Name="pnlPrazanPregled"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            IsHitTestVisible="False">
+                                    <TextBlock x:Name="txtPrazanPregled"
+                                               Foreground="{StaticResource MutedTextBrush}"
+                                               FontWeight="SemiBold"
+                                               Text="Učitavanje kupaca..."
+                                               TextAlignment="Center" />
                                 </StackPanel>
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Style="{StaticResource FieldLabel}"
-                                               Text="Godina" />
-                                    <ComboBox x:Name="cmbGodina"
-                                              SelectionChanged="ReportFilter_SelectionChanged" />
-                                </StackPanel>
-                                <StackPanel Grid.Column="4">
-                                    <TextBlock Style="{StaticResource FieldLabel}"
-                                               Text="Status" />
-                                    <ComboBox x:Name="cmbStatusIzvjestaja"
-                                              SelectionChanged="ReportFilter_SelectionChanged" />
-                                </StackPanel>
-                                <Button x:Name="btnOsvjeziPregledKonta"
-                                        Grid.Column="6"
-                                        MinWidth="110"
-                                        VerticalAlignment="Bottom"
-                                        Content="Osvježi"
-                                        Click="BtnOsvjeziPregledKonta_Click" />
                             </Grid>
-
-                            <DataGrid x:Name="dgKontaIzvjestaji"
-                                      Grid.Row="2"
-                                      AutoGenerateColumns="False"
-                                      IsReadOnly="True"
-                                      CanUserAddRows="False"
-                                      HeadersVisibility="Column"
-                                      GridLinesVisibility="Horizontal"
-                                      AlternationCount="2"
-                                      AlternatingRowBackground="{StaticResource SurfaceMutedBrush}"
-                                      SelectionChanged="DgKontaIzvjestaji_SelectionChanged">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Konto"
-                                                        Binding="{Binding Konto}"
-                                                        Width="120" />
-                                    <DataGridTextColumn Header="Kupac"
-                                                        Binding="{Binding NazivKupca}"
-                                                        Width="2*" />
-                                    <DataGridTextColumn Header="Broj aparata"
-                                                        Binding="{Binding BrojAparata}"
-                                                        Width="105" />
-                                    <DataGridTextColumn Header="Status"
-                                                        Binding="{Binding Status}"
-                                                        Width="105" />
-                                    <DataGridTextColumn Header="Posljednja radnja"
-                                                        Binding="{Binding PosljednjaRadnja}"
-                                                        Width="130" />
-                                    <DataGridTextColumn Header="Korisnik"
-                                                        Binding="{Binding PromijenioKorisnik}"
-                                                        Width="130" />
-                                    <DataGridTextColumn Header="Vrijeme promjene"
-                                                        Binding="{Binding PromijenjenoPrikaz}"
-                                                        Width="145" />
-                                </DataGrid.Columns>
-                            </DataGrid>
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="2"
+                    <Border x:Name="pnlBezOdabranogKupca"
+                            Grid.Row="2"
                             Padding="0"
                             Style="{StaticResource Card}">
+                        <StackPanel HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            <TextBlock FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Text="Odaberite kupca iz gornje tabele." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="pnlOdabraniKupac"
+                            Grid.Row="2"
+                            Padding="0"
+                            Style="{StaticResource Card}"
+                            Visibility="Collapsed">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -348,7 +441,7 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <Border Padding="22,13"
+                            <Border Padding="16,8"
                                     BorderBrush="#E4E6E9"
                                     BorderThickness="0,0,0,1">
                                 <Grid>
@@ -356,69 +449,104 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <TextBlock Text="Odabrani kupac i aparati"
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock x:Name="txtOdabraniKupac"
                                                    FontSize="16"
                                                    FontWeight="SemiBold" />
-                                        <TextBlock x:Name="txtOdabraniKupac"
-                                                   Margin="0,3,0,0"
-                                                   Foreground="{StaticResource MutedTextBrush}"
-                                                   Text="Odaberite kupca iz gornje tabele." />
+                                        <StackPanel Margin="0,2,0,0"
+                                                    Orientation="Horizontal">
+                                            <TextBlock x:Name="txtOdabraniPeriod"
+                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                       FontSize="12" />
+                                            <TextBlock x:Name="txtIzvjestajStatus"
+                                                       Margin="10,0,0,0"
+                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold" />
+                                        </StackPanel>
                                     </StackPanel>
-                                    <TextBlock x:Name="txtIzvjestajStatus"
-                                               Grid.Column="1"
-                                               MaxWidth="440"
-                                               Margin="20,0,0,0"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource MutedTextBrush}"
-                                               FontWeight="SemiBold"
-                                               TextWrapping="Wrap" />
+                                    <StackPanel Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                Orientation="Horizontal">
+                                        <Border Padding="11,4"
+                                                VerticalAlignment="Center"
+                                                CornerRadius="13">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{StaticResource ReportOpenBackgroundBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Zakljucen}" Value="True">
+                                                            <Setter Property="Background" Value="{StaticResource ReportClosedBackgroundBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       Text="{Binding Status}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource ReportOpenForegroundBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Zakljucen}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource ReportClosedForegroundBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+                                        <Button x:Name="btnPromijeniStatus"
+                                                MinWidth="100"
+                                                Margin="10,0,0,0"
+                                                Content="Zaključi"
+                                                IsEnabled="False"
+                                                Click="BtnPromijeniStatus_Click" />
+                                    </StackPanel>
                                 </Grid>
                             </Border>
 
-                            <Grid Grid.Row="1"
-                                  Margin="22,11,22,11">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="1.2*" />
-                                    <ColumnDefinition Width="14" />
-                                    <ColumnDefinition Width="1.1*" />
-                                    <ColumnDefinition Width="18" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource FieldLabel}"
-                                               Text="Broj zapisnika *" />
-                                    <TextBox x:Name="txtBrojZapisnika"
-                                             MaxLength="80" />
-                                </StackPanel>
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Style="{StaticResource FieldLabel}"
-                                               Text="Datum zaključivanja u DOCX-u *" />
-                                    <DatePicker x:Name="dpDatumZakljucivanja" />
-                                </StackPanel>
-                                <StackPanel Grid.Column="4"
-                                            VerticalAlignment="Bottom"
+                            <Border Grid.Row="1"
+                                    Padding="16,7"
+                                    Background="{StaticResource SurfaceMutedBrush}"
+                                    BorderBrush="#E4E6E9"
+                                    BorderThickness="0,0,0,1">
+                                <StackPanel HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
                                             Orientation="Horizontal">
-                                    <Button x:Name="btnPromijeniStatus"
-                                            MinWidth="145"
-                                            Margin="0,0,10,0"
-                                            Content="Zaključi period"
-                                            IsEnabled="False"
-                                            Click="BtnPromijeniStatus_Click" />
+                                    <TextBlock Margin="0,0,14,0"
+                                               VerticalAlignment="Center"
+                                               Foreground="{StaticResource PrimaryBrush}"
+                                               FontSize="11"
+                                               FontWeight="Bold"
+                                               Text="DOCX" />
+                                    <TextBlock Style="{StaticResource ReportInlineLabel}"
+                                               Text="Datum" />
+                                    <DatePicker x:Name="dpDatumZakljucivanja"
+                                                Width="155"
+                                                Height="38"
+                                                Padding="8,0"
+                                                HorizontalContentAlignment="Stretch"
+                                                VerticalAlignment="Center"
+                                                VerticalContentAlignment="Center"
+                                                SelectedDateFormat="Short"
+                                                Language="bs-Latn-BA" />
                                     <Button x:Name="btnGenerisiDocx"
-                                            MinWidth="125"
-                                            Margin="0,0,10,0"
+                                            MinWidth="118"
+                                            Margin="10,0,7,0"
+                                            VerticalAlignment="Center"
                                             Style="{StaticResource PrimaryButton}"
-                                            Content="Generiši DOCX"
+                                            Content="Sačuvaj DOCX"
                                             IsEnabled="False"
                                             Click="BtnGenerisiDocx_Click" />
                                     <Button x:Name="btnOtvoriWord"
-                                            Content="Otvori u Wordu"
+                                            MinWidth="105"
+                                            VerticalAlignment="Center"
+                                            Content="Otvori Word"
                                             IsEnabled="False"
                                             Click="BtnOtvoriWord_Click" />
                                 </StackPanel>
-                            </Grid>
+                            </Border>
 
                             <DataGrid x:Name="dgIzvjestaj"
                                       Grid.Row="2"
@@ -428,35 +556,39 @@
                                       HeadersVisibility="Column"
                                       GridLinesVisibility="Horizontal"
                                       AlternationCount="2"
-                                      AlternatingRowBackground="{StaticResource SurfaceMutedBrush}">
+                                      AlternatingRowBackground="{StaticResource SurfaceMutedBrush}"
+                                      RowHeight="36"
+                                      ColumnHeaderHeight="36"
+                                      CellStyle="{StaticResource ReportCenteredCell}"
+                                      ColumnHeaderStyle="{StaticResource ReportCenteredHeader}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="R.br."
                                                         Binding="{Binding RedniBroj}"
-                                                        Width="60" />
+                                                        Width="55" />
                                     <DataGridTextColumn Header="Tip"
                                                         Binding="{Binding Tip}"
-                                                        Width="72" />
-                                    <DataGridTextColumn Header="Punjenje kg"
-                                                        Binding="{Binding PunjenjeKg, StringFormat={}{0:0.##}}"
-                                                        Width="94" />
+                                                        Width="70" />
+                                    <DataGridTextColumn Header="Punjenje"
+                                                        Binding="{Binding PunjenjeKg, StringFormat={}{0:0.##} kg}"
+                                                        Width="90" />
                                     <DataGridTextColumn Header="Serijski broj"
                                                         Binding="{Binding SerijskiBroj}"
-                                                        Width="130" />
+                                                        Width="125" />
                                     <DataGridTextColumn Header="Godina"
                                                         Binding="{Binding GodinaProizvodnje}"
-                                                        Width="76" />
+                                                        Width="70" />
                                     <DataGridTextColumn Header="Datum servisa"
                                                         Binding="{Binding DatumServisa, StringFormat={}{0:dd.MM.yyyy}}"
-                                                        Width="110" />
+                                                        Width="105" />
                                     <DataGridTextColumn Header="Sljedeći servis"
                                                         Binding="{Binding SljedeciServis, StringFormat={}{0:dd.MM.yyyy}}"
-                                                        Width="120" />
+                                                        Width="115" />
                                     <DataGridTextColumn Header="Ispravnost"
                                                         Binding="{Binding KonstatacijaIspravnosti}"
-                                                        Width="120" />
+                                                        Width="115" />
                                     <DataGridTextColumn Header="Vozilo"
                                                         Binding="{Binding Vozilo}"
-                                                        Width="120" />
+                                                        Width="115" />
                                     <DataGridTextColumn Header="Ispitivanje izvršio"
                                                         Binding="{Binding IspitivanjeIzvrsio}"
                                                         Width="*" />

@@ -372,6 +372,8 @@ public partial class MainWindow : Window
 
         btnOsvjeziPregledKonta.IsEnabled = false;
         txtPregledKontaStatus.Text = "Učitavanje kupaca...";
+        pnlPrazanPregled.Visibility = Visibility.Visible;
+        txtPrazanPregled.Text = "Učitavanje kupaca...";
 
         try
         {
@@ -407,6 +409,10 @@ public partial class MainWindow : Window
             txtPregledKontaStatus.Text = rows.Count == 0
                 ? "Nema kupaca za odabrani period i status."
                 : $"Prikazano kupaca: {rows.Count}.";
+            pnlPrazanPregled.Visibility = rows.Count == 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            txtPrazanPregled.Text = "Nema kupaca za odabrani period i status.";
             txtGlobalStatus.Text = $"Učitan je pregled za {month:00}/{year}.";
         }
         catch (OperationCanceledException)
@@ -418,6 +424,8 @@ public partial class MainWindow : Window
             dgKontaIzvjestaji.ItemsSource = null;
             ClearSelectedReport();
             txtPregledKontaStatus.Text = "Pregled kupaca nije učitan.";
+            pnlPrazanPregled.Visibility = Visibility.Visible;
+            txtPrazanPregled.Text = "Pregled trenutno nije dostupan.";
             txtGlobalStatus.Text = "Greška pri učitavanju mjesečne evidencije.";
             MessageBox.Show(
                 $"Nije moguće učitati mjesečnu evidenciju.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
@@ -443,10 +451,18 @@ public partial class MainWindow : Window
         }
 
         _odabraniPregled = selected;
+        pnlBezOdabranogKupca.Visibility = Visibility.Collapsed;
+        pnlOdabraniKupac.Visibility = Visibility.Visible;
+        pnlOdabraniKupac.DataContext = selected;
         txtOdabraniKupac.Text = selected.Kupac.Prikaz;
+        var monthName = (cmbMjesec.SelectedItem as MjesecStavka)?.Naziv ?? $"{_pregledMjesec:00}. mjesec";
+        txtOdabraniPeriod.Text = $"{monthName} {_pregledGodina} • {FormatirajBrojAparata(selected.BrojAparata)}";
         btnPromijeniStatus.Content = selected.Zakljucen
-            ? "Ponovo otvori period"
-            : "Zaključi period";
+            ? "Ponovo otvori"
+            : "Zaključi";
+        btnPromijeniStatus.ToolTip = selected.Zakljucen
+            ? "Dozvoli nove unose za ovaj konto i period."
+            : "Označi izvještaj za ovaj konto i period kao završen.";
         btnPromijeniStatus.IsEnabled = true;
         btnGenerisiDocx.IsEnabled = true;
 
@@ -548,14 +564,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        var broj = txtBrojZapisnika.Text.Trim();
-        if (string.IsNullOrWhiteSpace(broj))
-        {
-            MessageBox.Show("Unesite broj zapisnika.", "Provjera podataka", MessageBoxButton.OK, MessageBoxImage.Warning);
-            txtBrojZapisnika.Focus();
-            return;
-        }
-
         if (dpDatumZakljucivanja.SelectedDate is not DateTime datumZakljucivanja)
         {
             MessageBox.Show("Odaberite datum zaključivanja.", "Provjera podataka", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -594,7 +602,7 @@ public partial class MainWindow : Window
             }
 
             var request = new IzvjestajZahtjev(
-                broj,
+                string.Empty,
                 datumZakljucivanja.Date,
                 konto!,
                 month,
@@ -734,9 +742,14 @@ public partial class MainWindow : Window
         _odabraniPregled = null;
         _trenutniIzvjestaj = [];
         dgIzvjestaj.ItemsSource = null;
-        txtOdabraniKupac.Text = "Odaberite kupca iz gornje tabele.";
+        pnlOdabraniKupac.DataContext = null;
+        pnlOdabraniKupac.Visibility = Visibility.Collapsed;
+        pnlBezOdabranogKupca.Visibility = Visibility.Visible;
+        txtOdabraniKupac.Text = string.Empty;
+        txtOdabraniPeriod.Text = string.Empty;
         txtIzvjestajStatus.Text = string.Empty;
-        btnPromijeniStatus.Content = "Zaključi period";
+        btnPromijeniStatus.Content = "Zaključi";
+        btnPromijeniStatus.ToolTip = null;
         btnPromijeniStatus.IsEnabled = false;
         btnGenerisiDocx.IsEnabled = false;
     }
@@ -803,6 +816,12 @@ public partial class MainWindow : Window
         new(IzvjestajStatusFilter.Zakljuceni, "Zaključeni"),
         new(IzvjestajStatusFilter.Svi, "Svi")
     ];
+
+    private static string FormatirajBrojAparata(int count) => count switch
+    {
+        1 => "1 aparat",
+        _ => $"{count} aparata"
+    };
 
     private static string SafeFileName(string value)
     {
