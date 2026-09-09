@@ -30,15 +30,26 @@ public sealed class IzvjestajEvidencijaRepository
             (
                 SELECT
                     LTRIM(RTRIM(p.konto)) AS Konto,
+                    MONTH(p.datum_servisa) AS Mjesec,
+                    YEAR(p.datum_servisa) AS Godina,
                     COUNT_BIG(1) AS BrojAparata
                 FROM dbo.ppaparati AS p
-                WHERE p.datum_servisa >= @from
-                  AND p.datum_servisa < @to
-                GROUP BY LTRIM(RTRIM(p.konto))
+                WHERE @statusFilter = 0
+                   OR
+                   (
+                       p.datum_servisa >= @from
+                       AND p.datum_servisa < @to
+                   )
+                GROUP BY
+                    LTRIM(RTRIM(p.konto)),
+                    MONTH(p.datum_servisa),
+                    YEAR(p.datum_servisa)
             )
             SELECT
                 period.Konto,
                 ISNULL(kupac.Naziv, N'') AS NazivKupca,
+                period.Mjesec,
+                period.Godina,
                 CAST(period.BrojAparata AS int) AS BrojAparata,
                 CAST(ISNULL(status.zakljucen, 0) AS bit) AS Zakljucen,
                 ISNULL(status.posljednja_radnja, '') AS PosljednjaRadnjaKod,
@@ -53,14 +64,14 @@ public sealed class IzvjestajEvidencijaRepository
                 WHERE LTRIM(RTRIM(CAST(k.konto AS nvarchar(20)))) = period.Konto
                 ORDER BY LTRIM(RTRIM(CAST(k.naziv AS nvarchar(255))))
             ) AS kupac
-            LEFT JOIN dbo.ppizvjestaji_status AS status
+            LEFT JOIN dbo.ppaparati_status AS status
                 ON status.konto = period.Konto
-               AND status.godina = @year
-               AND status.mjesec = @month
+               AND status.godina = period.Godina
+               AND status.mjesec = period.Mjesec
             WHERE @statusFilter = 2
                OR (@statusFilter = 1 AND ISNULL(status.zakljucen, 0) = 1)
                OR (@statusFilter = 0 AND ISNULL(status.zakljucen, 0) = 0)
-            ORDER BY period.Konto, kupac.Naziv;
+            ORDER BY period.Godina, period.Mjesec, period.Konto, kupac.Naziv;
             """;
 
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
@@ -106,7 +117,7 @@ public sealed class IzvjestajEvidencijaRepository
             SELECT TOP (1)
                 id AS Id,
                 zakljucen AS Zakljucen
-            FROM dbo.ppizvjestaji_status WITH (UPDLOCK, HOLDLOCK)
+            FROM dbo.ppaparati_status WITH (UPDLOCK, HOLDLOCK)
             WHERE konto = @konto
               AND godina = @year
               AND mjesec = @month;
@@ -121,7 +132,7 @@ public sealed class IzvjestajEvidencijaRepository
             """;
 
         const string insertStatusSql = """
-            INSERT INTO dbo.ppizvjestaji_status
+            INSERT INTO dbo.ppaparati_status
             (
                 konto,
                 godina,
@@ -145,7 +156,7 @@ public sealed class IzvjestajEvidencijaRepository
             """;
 
         const string updateStatusSql = """
-            UPDATE dbo.ppizvjestaji_status
+            UPDATE dbo.ppaparati_status
             SET zakljucen = @zakljucen,
                 posljednja_radnja = @radnja,
                 promijenio_korisnik = @korisnickoIme,
@@ -154,7 +165,7 @@ public sealed class IzvjestajEvidencijaRepository
             """;
 
         const string insertAuditSql = """
-            INSERT INTO dbo.ppizvjestaji_status_audit
+            INSERT INTO dbo.ppaparati_status_audit
             (
                 status_id,
                 radnja,

@@ -6,6 +6,8 @@ public sealed class IzvjestajPregledRed
 {
     public string Konto { get; init; } = string.Empty;
     public string NazivKupca { get; init; } = string.Empty;
+    public int Mjesec { get; init; }
+    public int Godina { get; init; }
     public int BrojAparata { get; init; }
     public bool Zakljucen { get; init; }
     public string PosljednjaRadnjaKod { get; init; } = string.Empty;
@@ -13,6 +15,7 @@ public sealed class IzvjestajPregledRed
     public DateTimeOffset? PromijenjenoUtc { get; init; }
 
     public string Status => Zakljucen ? "Zaključen" : "Nezaključen";
+    public string PeriodPrikaz => $"{Mjesec:00}/{Godina}";
 
     public string PosljednjaRadnja => PosljednjaRadnjaKod switch
     {

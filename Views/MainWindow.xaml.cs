@@ -64,6 +64,7 @@ public partial class MainWindow : Window
         cmbMjesec.SelectedIndex = DateTime.Today.Month - 1;
         cmbStatusIzvjestaja.ItemsSource = KreirajStatusFiltere();
         cmbStatusIzvjestaja.SelectedIndex = 0;
+        OsvjeziDostupnostPerioda();
 
         Loaded += MainWindow_Loaded;
     }
@@ -344,6 +345,7 @@ public partial class MainWindow : Window
 
     private async void ReportFilter_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        OsvjeziDostupnostPerioda();
         if (_reportFiltersReady)
         {
             await UcitajPregledKontaAsync();
@@ -352,10 +354,10 @@ public partial class MainWindow : Window
 
     private async void BtnOsvjeziPregledKonta_Click(object sender, RoutedEventArgs e)
     {
-        await UcitajPregledKontaAsync(_odabraniPregled?.Konto);
+        await UcitajPregledKontaAsync(_odabraniPregled);
     }
 
-    private async Task UcitajPregledKontaAsync(string? zadrziKonto = null)
+    private async Task UcitajPregledKontaAsync(IzvjestajPregledRed? zadrziRed = null)
     {
         if (!TryGetOverviewFilter(out var month, out var year, out var statusFilter, out var error))
         {
@@ -388,12 +390,14 @@ public partial class MainWindow : Window
             _pregledGodina = year;
             dgKontaIzvjestaji.ItemsSource = rows;
 
-            var rowToKeep = string.IsNullOrWhiteSpace(zadrziKonto)
+            var rowToKeep = zadrziRed is null
                 ? null
                 : rows.FirstOrDefault(row => string.Equals(
                     row.Konto,
-                    zadrziKonto,
-                    StringComparison.Ordinal));
+                    zadrziRed.Konto,
+                    StringComparison.Ordinal)
+                    && row.Mjesec == zadrziRed.Mjesec
+                    && row.Godina == zadrziRed.Godina);
 
             if (rowToKeep is null)
             {
@@ -406,14 +410,23 @@ public partial class MainWindow : Window
                 dgKontaIzvjestaji.ScrollIntoView(rowToKeep);
             }
 
+            var prikazSvihNezakljucenih = statusFilter == IzvjestajStatusFilter.Nezakljuceni;
             txtPregledKontaStatus.Text = rows.Count == 0
-                ? "Nema kupaca za odabrani period i status."
-                : $"Prikazano kupaca: {rows.Count}.";
+                ? prikazSvihNezakljucenih
+                    ? "Nema nezaključenih perioda."
+                    : "Nema kupaca za odabrani period."
+                : prikazSvihNezakljucenih
+                    ? $"Nezaključenih perioda: {rows.Count}."
+                    : $"Prikazano kupaca: {rows.Count}.";
             pnlPrazanPregled.Visibility = rows.Count == 0
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-            txtPrazanPregled.Text = "Nema kupaca za odabrani period i status.";
-            txtGlobalStatus.Text = $"Učitan je pregled za {month:00}/{year}.";
+            txtPrazanPregled.Text = prikazSvihNezakljucenih
+                ? "Nema nezaključenih perioda."
+                : "Nema kupaca za odabrani period.";
+            txtGlobalStatus.Text = prikazSvihNezakljucenih
+                ? "Učitani su svi nezaključeni periodi."
+                : $"Učitan je pregled za {month:00}/{year}.";
         }
         catch (OperationCanceledException)
         {
@@ -451,11 +464,13 @@ public partial class MainWindow : Window
         }
 
         _odabraniPregled = selected;
+        _pregledMjesec = selected.Mjesec;
+        _pregledGodina = selected.Godina;
         pnlBezOdabranogKupca.Visibility = Visibility.Collapsed;
         pnlOdabraniKupac.Visibility = Visibility.Visible;
         pnlOdabraniKupac.DataContext = selected;
         txtOdabraniKupac.Text = selected.Kupac.Prikaz;
-        var monthName = (cmbMjesec.SelectedItem as MjesecStavka)?.Naziv ?? $"{_pregledMjesec:00}. mjesec";
+        var monthName = NazivMjeseca(selected.Mjesec);
         txtOdabraniPeriod.Text = $"{monthName} {_pregledGodina} • {FormatirajBrojAparata(selected.BrojAparata)}";
         btnPromijeniStatus.Content = selected.Zakljucen
             ? "Ponovo otvori"
@@ -540,7 +555,7 @@ public partial class MainWindow : Window
                 noviStatus,
                 _korisnik.KorisnickoIme);
 
-            await UcitajPregledKontaAsync(selected.Konto);
+            await UcitajPregledKontaAsync(selected);
             txtGlobalStatus.Text = noviStatus
                 ? "Period je uspješno zaključen."
                 : "Period je uspješno ponovo otvoren.";
@@ -552,7 +567,7 @@ public partial class MainWindow : Window
                 "Mjesečna evidencija",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
-            await UcitajPregledKontaAsync(selected.Konto);
+            await UcitajPregledKontaAsync(selected);
         }
     }
 
@@ -736,6 +751,21 @@ public partial class MainWindow : Window
         return true;
     }
 
+    private void OsvjeziDostupnostPerioda()
+    {
+        var prikazSvihNezakljucenih =
+            (cmbStatusIzvjestaja.SelectedItem as IzvjestajStatusFilterStavka)?.Vrijednost
+            == IzvjestajStatusFilter.Nezakljuceni;
+
+        cmbMjesec.IsEnabled = !prikazSvihNezakljucenih;
+        cmbGodina.IsEnabled = !prikazSvihNezakljucenih;
+        var tooltip = prikazSvihNezakljucenih
+            ? "Za nezaključene se prikazuju svi mjeseci i godine."
+            : null;
+        cmbMjesec.ToolTip = tooltip;
+        cmbGodina.ToolTip = tooltip;
+    }
+
     private void ClearSelectedReport()
     {
         _detaljiIzvjestajaCancellation?.Cancel();
@@ -822,6 +852,10 @@ public partial class MainWindow : Window
         1 => "1 aparat",
         _ => $"{count} aparata"
     };
+
+    private static string NazivMjeseca(int month) =>
+        KreirajMjesece().FirstOrDefault(item => item.Broj == month)?.Naziv
+        ?? $"{month:00}. mjesec";
 
     private static string SafeFileName(string value)
     {

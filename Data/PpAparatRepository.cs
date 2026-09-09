@@ -55,7 +55,7 @@ public sealed class PpAparatRepository
                 CASE WHEN EXISTS
                 (
                     SELECT 1
-                    FROM dbo.ppizvjestaji_status WITH (UPDLOCK, HOLDLOCK)
+                    FROM dbo.ppaparati_status WITH (UPDLOCK, HOLDLOCK)
                     WHERE konto = @konto
                       AND godina = @year
                       AND mjesec = @month

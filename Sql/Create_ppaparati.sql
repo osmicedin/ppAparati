@@ -1,5 +1,28 @@
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+
+IF DB_NAME() IN (N'master', N'model', N'msdb', N'tempdb')
+BEGIN
+    THROW 50001, 'Skript pokrenite nad glavnom poslovnom bazom, ne nad sistemskom bazom.', 1;
+END;
+GO
+
+/* Preimenuj tabele iz prethodne verzije bez gubitka podataka. */
+IF OBJECT_ID(N'dbo.ppaparati_status', N'U') IS NULL
+   AND OBJECT_ID(N'dbo.ppizvjestaji_status', N'U') IS NOT NULL
+BEGIN
+    EXEC sys.sp_rename N'dbo.ppizvjestaji_status', N'ppaparati_status';
+END;
+GO
+
+IF OBJECT_ID(N'dbo.ppaparati_status_audit', N'U') IS NULL
+   AND OBJECT_ID(N'dbo.ppizvjestaji_status_audit', N'U') IS NOT NULL
+BEGIN
+    EXEC sys.sp_rename N'dbo.ppizvjestaji_status_audit', N'ppaparati_status_audit';
+END;
+GO
 
 IF OBJECT_ID(N'dbo.ppaparati', N'U') IS NULL
 BEGIN
@@ -35,7 +58,17 @@ BEGIN
         CONSTRAINT CK_ppaparati_ispitivac_not_blank
             CHECK (LEN(LTRIM(RTRIM(ispitivanje_izvrsio))) > 0)
     );
+END;
+GO
 
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'dbo.ppaparati')
+      AND name = N'IX_ppaparati_konto_datum_servisa'
+)
+BEGIN
     CREATE INDEX IX_ppaparati_konto_datum_servisa
         ON dbo.ppaparati (konto, datum_servisa)
         INCLUDE
@@ -51,12 +84,12 @@ BEGIN
 END;
 GO
 
-IF OBJECT_ID(N'dbo.ppizvjestaji_status', N'U') IS NULL
+IF OBJECT_ID(N'dbo.ppaparati_status', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.ppizvjestaji_status
+    CREATE TABLE dbo.ppaparati_status
     (
         id BIGINT IDENTITY(1, 1) NOT NULL
-            CONSTRAINT PK_ppizvjestaji_status PRIMARY KEY,
+            CONSTRAINT PK_ppaparati_status PRIMARY KEY,
         konto VARCHAR(20) NOT NULL,
         godina SMALLINT NOT NULL,
         mjesec TINYINT NOT NULL,
@@ -65,48 +98,65 @@ BEGIN
         promijenio_korisnik NVARCHAR(100) NOT NULL,
         promijenjeno_utc DATETIMEOFFSET(0) NOT NULL,
 
-        CONSTRAINT UQ_ppizvjestaji_status_period
+        CONSTRAINT UQ_ppaparati_status_period
             UNIQUE (konto, godina, mjesec),
-        CONSTRAINT CK_ppizvjestaji_status_konto_not_blank
+        CONSTRAINT CK_ppaparati_status_konto_not_blank
             CHECK (LEN(LTRIM(RTRIM(konto))) > 0),
-        CONSTRAINT CK_ppizvjestaji_status_godina
+        CONSTRAINT CK_ppaparati_status_godina
             CHECK (godina BETWEEN 1900 AND 9999),
-        CONSTRAINT CK_ppizvjestaji_status_mjesec
+        CONSTRAINT CK_ppaparati_status_mjesec
             CHECK (mjesec BETWEEN 1 AND 12),
-        CONSTRAINT CK_ppizvjestaji_status_radnja
+        CONSTRAINT CK_ppaparati_status_radnja
             CHECK (posljednja_radnja IN ('Z', 'O')),
-        CONSTRAINT CK_ppizvjestaji_status_stanje_radnja
+        CONSTRAINT CK_ppaparati_status_stanje_radnja
             CHECK (
                 (zakljucen = 1 AND posljednja_radnja = 'Z')
                 OR (zakljucen = 0 AND posljednja_radnja = 'O')
             ),
-        CONSTRAINT CK_ppizvjestaji_status_korisnik_not_blank
+        CONSTRAINT CK_ppaparati_status_korisnik_not_blank
             CHECK (LEN(LTRIM(RTRIM(promijenio_korisnik))) > 0)
     );
 END;
 GO
 
-IF OBJECT_ID(N'dbo.ppizvjestaji_status_audit', N'U') IS NULL
+IF OBJECT_ID(N'dbo.ppaparati_status_audit', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.ppizvjestaji_status_audit
+    CREATE TABLE dbo.ppaparati_status_audit
     (
         id BIGINT IDENTITY(1, 1) NOT NULL
-            CONSTRAINT PK_ppizvjestaji_status_audit PRIMARY KEY,
+            CONSTRAINT PK_ppaparati_status_audit PRIMARY KEY,
         status_id BIGINT NOT NULL,
         radnja CHAR(1) NOT NULL,
         korisnicko_ime NVARCHAR(100) NOT NULL,
         dogadjaj_utc DATETIMEOFFSET(0) NOT NULL,
 
-        CONSTRAINT FK_ppizvjestaji_status_audit_status
+        CONSTRAINT FK_ppaparati_status_audit_status
             FOREIGN KEY (status_id)
-            REFERENCES dbo.ppizvjestaji_status (id),
-        CONSTRAINT CK_ppizvjestaji_status_audit_radnja
+            REFERENCES dbo.ppaparati_status (id),
+        CONSTRAINT CK_ppaparati_status_audit_radnja
             CHECK (radnja IN ('Z', 'O')),
-        CONSTRAINT CK_ppizvjestaji_status_audit_korisnik_not_blank
+        CONSTRAINT CK_ppaparati_status_audit_korisnik_not_blank
             CHECK (LEN(LTRIM(RTRIM(korisnicko_ime))) > 0)
     );
-
-    CREATE INDEX IX_ppizvjestaji_status_audit_status_dogadjaj
-        ON dbo.ppizvjestaji_status_audit (status_id, dogadjaj_utc DESC);
 END;
+GO
+
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'dbo.ppaparati_status_audit')
+      AND name IN
+      (
+          N'IX_ppaparati_status_audit_status_dogadjaj',
+          N'IX_ppizvjestaji_status_audit_status_dogadjaj'
+      )
+)
+BEGIN
+    CREATE INDEX IX_ppaparati_status_audit_status_dogadjaj
+        ON dbo.ppaparati_status_audit (status_id, dogadjaj_utc DESC);
+END;
+GO
+
+PRINT N'Tabele za PP aparate su spremne u bazi ' + QUOTENAME(DB_NAME()) + N'.';
 GO

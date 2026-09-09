@@ -4,16 +4,15 @@ WPF aplikacija za prijavu korisnika, unos evidencije PP aparata i generisanje mj
 
 ## Priprema
 
-1. Kopirati `appsettings.example.json` u `appsettings.json` i upisati lokalne SQL Server kredencijale.
-2. Pokrenuti `Sql/Create_ppaparati.sql` nad bazom koja već sadrži tabele `a_user` i `konta`.
-   Skript je idempotentan i treba ga ponovo pokrenuti i pri nadogradnji postojeće instalacije.
+1. Kopirati `appsettings.example.json` u `appsettings.json` i upisati kredencijale glavne SQL Server baze.
+2. Pokrenuti `Sql/Create_ppaparati.sql` nad tom bazom. Skript je idempotentan i ne kreira novu bazu.
 3. Pokrenuti aplikaciju sa `dotnet run`.
 
 `appsettings.json` je namjerno ignorisan i ne treba ga dodavati u Git.
 
 ## Baza
 
-Aplikacija radi samo `SELECT` nad `a_user` i `konta`, te `INSERT` i `SELECT` nad `ppaparati`. Status mjesečnog izvještaja čuva se u `ppizvjestaji_status`, a svako zaključivanje i ponovno otvaranje u `ppizvjestaji_status_audit`. Ne postoje funkcije za izmjenu ili brisanje korisnika i PP aparata.
+Aplikacija koristi glavnu bazu koja već sadrži `a_user` i `konta`. Projektne tabele su `ppaparati`, `ppaparati_status` i `ppaparati_status_audit`. Skript automatski preimenuje stare statusne tabele bez gubitka podataka. Ne postoje funkcije za izmjenu ili brisanje korisnika i PP aparata.
 
 ## Izvještaji
 

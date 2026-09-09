@@ -90,6 +90,19 @@
         </Style>
 
         <Style TargetType="DatePicker">
+            <Style.Resources>
+                <!--
+                    DatePicker internally contains a Button. Without a local style it
+                    inherits the application's 118 px minimum button width, which
+                    covers the text field and leaves only the fixed "15" calendar
+                    glyph visible.
+                -->
+                <Style TargetType="Button">
+                    <Setter Property="MinWidth" Value="0" />
+                    <Setter Property="MinHeight" Value="0" />
+                    <Setter Property="Padding" Value="0" />
+                </Style>
+            </Style.Resources>
             <Setter Property="Height" Value="40" />
             <Setter Property="Padding" Value="8,4" />
             <Setter Property="VerticalContentAlignment" Value="Center" />

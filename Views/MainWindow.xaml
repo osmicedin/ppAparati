@@ -358,6 +358,9 @@
                                         <DataGridTextColumn Header="Kupac"
                                                             Binding="{Binding NazivKupca}"
                                                             Width="2*" />
+                                        <DataGridTextColumn Header="Period"
+                                                            Binding="{Binding PeriodPrikaz}"
+                                                            Width="90" />
                                         <DataGridTextColumn Header="Aparati"
                                                             Binding="{Binding BrojAparata}"
                                                             Width="80" />
