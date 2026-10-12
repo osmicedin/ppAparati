@@ -14,13 +14,20 @@ public sealed class PpAparatRepository : IPpAparatRepository
         _connectionFactory = connectionFactory;
     }
 
-    public async Task<long> InsertAsync(PpAparatInput input, CancellationToken cancellationToken = default)
+    public async Task<long> InsertAsync(
+        PpAparatInput input,
+        string korisnickoIme,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(input);
         if (!ServiceDateRange.Contains(input.DatumServisa))
         {
             throw new ArgumentOutOfRangeException(
                 nameof(input), "Datum servisa mora biti između 01.01.1900. i 30.06.9999.");
         }
+
+        var konto = IzvjestajGrupaSql.ValidateAccount(input.Konto);
+        korisnickoIme = IzvjestajGrupaSql.ValidateUser(korisnickoIme);
 
         const string accountExistsSql = """
             SELECT COUNT_BIG(1)
@@ -29,8 +36,34 @@ public sealed class PpAparatRepository : IPpAparatRepository
             """;
 
         const string insertSql = """
+            DECLARE @grupaId bigint;
+            SELECT @grupaId = id
+            FROM dbo.ppaparati_grupe
+            WHERE konto = @Konto AND zakljucen = 0;
+
+            IF @grupaId IS NULL
+            BEGIN
+                DECLARE @openedUtc datetimeoffset(7) = TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00');
+                INSERT INTO dbo.ppaparati_grupe
+                (
+                    konto, zakljucen, verzija,
+                    posljednja_radnja, promijenio_korisnik, promijenjeno_utc
+                )
+                VALUES (@Konto, 0, 1, 'O', @korisnickoIme, @openedUtc);
+                SET @grupaId = CONVERT(bigint, SCOPE_IDENTITY());
+
+                INSERT INTO dbo.ppaparati_grupe_audit
+                    (grupa_id, radnja, korisnicko_ime, dogadjaj_utc)
+                VALUES (@grupaId, 'O', @korisnickoIme, @openedUtc);
+            END;
+
+            UPDATE dbo.ppaparati_grupe
+            SET verzija = verzija + 1
+            WHERE id = @grupaId;
+
             INSERT INTO dbo.ppaparati
             (
+                grupa_id,
                 konto,
                 tip,
                 punjenje_kg,
@@ -44,6 +77,7 @@ public sealed class PpAparatRepository : IPpAparatRepository
             OUTPUT INSERTED.id
             VALUES
             (
+                @grupaId,
                 @Konto,
                 @Tip,
                 @PunjenjeKg,
@@ -56,58 +90,28 @@ public sealed class PpAparatRepository : IPpAparatRepository
             );
             """;
 
-        const string periodClosedSql = """
-            SELECT CAST(
-                CASE WHEN EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.ppaparati_status WITH (UPDLOCK, HOLDLOCK)
-                    WHERE konto = @konto
-                      AND godina = @year
-                      AND mjesec = @month
-                      AND zakljucen = 1
-                ) THEN 1 ELSE 0 END
-                AS bit);
-            """;
-
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(
-            IsolationLevel.Serializable,
-            cancellationToken);
+            IsolationLevel.ReadCommitted, cancellationToken);
+        await IzvjestajGrupaSql.LockAccountAsync(
+            connection, transaction, konto, exclusive: true, cancellationToken);
 
         var accountCount = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             accountExistsSql,
-            new { konto = input.Konto },
+            new { konto = IzvjestajGrupaSql.AccountParameter(konto) },
             transaction,
             cancellationToken: cancellationToken));
-
         if (accountCount == 0)
         {
             throw new InvalidOperationException("Odabrani konto više ne postoji u tabeli konta.");
-        }
-
-        var periodClosed = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
-            periodClosedSql,
-            new
-            {
-                konto = input.Konto,
-                year = input.DatumServisa.Year,
-                month = input.DatumServisa.Month
-            },
-            transaction,
-            cancellationToken: cancellationToken));
-
-        if (periodClosed)
-        {
-            throw new InvalidOperationException(
-                "Izvještaj za odabrani konto i mjesec je zaključen. Prvo ponovo otvorite period u kartici Izvještaji.");
         }
 
         var id = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             insertSql,
             new
             {
-                input.Konto,
+                Konto = IzvjestajGrupaSql.AccountParameter(konto),
+                korisnickoIme,
                 input.Tip,
                 input.PunjenjeKg,
                 input.SerijskiBroj,
@@ -124,18 +128,17 @@ public sealed class PpAparatRepository : IPpAparatRepository
         return id;
     }
 
-    public async Task<IReadOnlyList<PpAparatRecord>> GetForReportAsync(
-        string konto,
-        int month,
-        int year,
+    public async Task<IzvjestajSnimak> GetForReportAsync(
+        long grupaId,
+        long ocekivanaVerzija,
         CancellationToken cancellationToken = default)
     {
-        var from = new DateTime(year, month, 1);
-        var to = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+        IzvjestajGrupaSql.ValidateVersion(grupaId, ocekivanaVerzija);
 
-        const string sql = """
+        const string recordsSql = """
             SELECT
                 id AS Id,
+                grupa_id AS GrupaId,
                 LTRIM(RTRIM(konto)) AS Konto,
                 LTRIM(RTRIM(tip)) AS Tip,
                 punjenje_kg AS PunjenjeKg,
@@ -147,32 +150,28 @@ public sealed class PpAparatRepository : IPpAparatRepository
                 LTRIM(RTRIM(vozilo)) AS Vozilo,
                 LTRIM(RTRIM(ispitivanje_izvrsio)) AS IspitivanjeIzvrsio
             FROM dbo.ppaparati
-            WHERE konto = @konto
-              AND datum_servisa >= @from
-              AND datum_servisa <= @to
+            WHERE grupa_id = @grupaId
             ORDER BY datum_servisa, id;
             """;
 
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
-        var rows = await connection.QueryAsync<PpAparatRecord>(new CommandDefinition(
-            sql,
-            new { konto, from, to },
-            cancellationToken: cancellationToken));
-        return rows.AsList();
-    }
+        var konto = await IzvjestajGrupaSql.GetAccountAsync(connection, grupaId, cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(
+            IsolationLevel.ReadCommitted, cancellationToken);
+        await IzvjestajGrupaSql.LockAccountAsync(
+            connection, transaction, konto, exclusive: false, cancellationToken);
 
-    public async Task<IReadOnlyList<int>> GetAvailableYearsAsync(CancellationToken cancellationToken = default)
-    {
-        const string sql = """
-            SELECT DISTINCT YEAR(datum_servisa)
-            FROM dbo.ppaparati
-            ORDER BY YEAR(datum_servisa) DESC;
-            """;
+        var grupa = await connection.QuerySingleOrDefaultAsync<IzvjestajPregledRed>(new CommandDefinition(
+            IzvjestajGrupaSql.Rows + " AND g.id = @grupaId;",
+            new { grupaId }, transaction, cancellationToken: cancellationToken));
+        if (grupa is null || grupa.Verzija != ocekivanaVerzija)
+        {
+            throw new IzvjestajPromijenjenException();
+        }
 
-        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
-        var years = await connection.QueryAsync<int>(new CommandDefinition(
-            sql,
-            cancellationToken: cancellationToken));
-        return years.AsList();
+        var aparati = await connection.QueryAsync<PpAparatRecord>(new CommandDefinition(
+            recordsSql, new { grupaId }, transaction, cancellationToken: cancellationToken));
+        await transaction.CommitAsync(cancellationToken);
+        return new IzvjestajSnimak(grupa, aparati.AsList());
     }
 }

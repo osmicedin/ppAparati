@@ -29,7 +29,7 @@
                                FontSize="24"
                                FontWeight="Bold" />
                     <TextBlock Margin="0,3,0,0"
-                               Text="Unos servisiranih aparata i mjesečni zapisnici"
+                               Text="Unos servisiranih aparata i zapisnici po kupcima"
                                Foreground="#F8DEE4" />
                 </StackPanel>
 
@@ -293,21 +293,6 @@
                                         <StackPanel VerticalAlignment="Center"
                                                     Orientation="Horizontal">
                                             <TextBlock Style="{StaticResource ReportInlineLabel}"
-                                                       Text="Period" />
-                                            <ComboBox x:Name="cmbMjesec"
-                                                      Width="140"
-                                                      VerticalContentAlignment="Center"
-                                                      SelectionChanged="ReportFilter_SelectionChanged" />
-                                            <ComboBox x:Name="cmbGodina"
-                                                      Width="100"
-                                                      Margin="7,0,0,0"
-                                                      VerticalContentAlignment="Center"
-                                                      SelectionChanged="ReportFilter_SelectionChanged" />
-                                            <Border Width="1"
-                                                    Height="24"
-                                                    Margin="16,0"
-                                                    Background="{StaticResource BorderBrush}" />
-                                            <TextBlock Style="{StaticResource ReportInlineLabel}"
                                                        Text="Status" />
                                             <ComboBox x:Name="cmbStatusIzvjestaja"
                                                       Width="160"
@@ -361,9 +346,6 @@
                                         <DataGridTextColumn Header="Kupac"
                                                             Binding="{Binding NazivKupca}"
                                                             Width="2*" />
-                                        <DataGridTextColumn Header="Period"
-                                                            Binding="{Binding PeriodPrikaz}"
-                                                            Width="90" />
                                         <DataGridTextColumn Header="Aparati"
                                                             Binding="{Binding BrojAparata}"
                                                             Width="80" />
@@ -444,6 +426,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
@@ -512,7 +495,23 @@
                                 </Grid>
                             </Border>
 
-                            <Border Grid.Row="1"
+                            <Border Grid.Row="1" Padding="16,7"
+                                    BorderBrush="#E4E6E9" BorderThickness="0,0,0,1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource ReportInlineLabel}" Text="Skup / historija" />
+                                    <ComboBox x:Name="cmbHistorijaIzvjestaja" Grid.Column="1"
+                                              DisplayMemberPath="GrupaPrikaz"
+                                              VerticalContentAlignment="Center"
+                                              ToolTip="Odaberite trenutni skup ili ranije zaključivanje."
+                                              SelectionChanged="HistorijaIzvjestaja_SelectionChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Row="2"
                                     Padding="16,7"
                                     Background="{StaticResource SurfaceMutedBrush}"
                                     BorderBrush="#E4E6E9"
@@ -527,7 +526,7 @@
                                                FontWeight="Bold"
                                                Text="DOCX" />
                                     <TextBlock Style="{StaticResource ReportInlineLabel}"
-                                               Text="Datum" />
+                                               Text="Datum dokumenta" />
                                     <DatePicker x:Name="dpDatumZakljucivanja"
                                                 SelectedDateChanged="DpDatumZakljucivanja_SelectedDateChanged"
                                                 Width="155"
@@ -557,7 +556,7 @@
                             </Border>
 
                             <DataGrid x:Name="dgIzvjestaj"
-                                      Grid.Row="2"
+                                      Grid.Row="3"
                                       AutoGenerateColumns="False"
                                       IsReadOnly="True"
                                       CanUserAddRows="False"

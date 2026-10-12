@@ -20,31 +20,40 @@ internal sealed class WindowTestContext : IDisposable
         Window = new MainWindow(new("tester", "tester", "Test", "User"),
             new KontoRepository(new SqlConnectionFactory("Server=invalid;Integrated Security=true")),
             Aparati, Reports, new PpAparatValidator(), Docx, Dialogs);
-        var years = Control<ComboBox>("cmbGodina");
-        years.ItemsSource = new[] { 2026 };
-        years.SelectedItem = 2026;
         Control<DatePicker>("dpDatumZakljucivanja").SelectedDate = new DateTime(2026, 9, 30);
     }
 
     public T Control<T>(string name) where T : FrameworkElement => (T)Window.FindName(name);
 
+    public void Register(IzvjestajPregledRed row)
+    {
+        Aparati.Snapshots[row.GrupaId] = Snapshot(row);
+        Reports.Groups[row.Konto] = [row];
+    }
+
     public void Select(IzvjestajPregledRed row)
     {
+        Register(row);
         var grid = Control<DataGrid>("dgKontaIzvjestaji");
         grid.ItemsSource = new[] { row };
         grid.SelectedItem = row;
     }
 
-    public static IzvjestajPregledRed Row(string konto = "A", int month = 8, bool closed = false) => new()
+    public static IzvjestajPregledRed Row(string konto = "A", long grupaId = 0, bool closed = false, long version = 1) => new()
     {
-        Konto = konto, NazivKupca = "Kupac " + konto, Mjesec = month, Godina = 2026, BrojAparata = 1, Zakljucen = closed
+        Konto = konto, NazivKupca = "Kupac " + konto, GrupaId = grupaId == 0 ? konto[0] - 'A' + 1 : grupaId,
+        Verzija = version, BrojAparata = 1, Zakljucen = closed,
+        DatumOd = new DateTime(2026, 8, 9), DatumDo = new DateTime(2026, 8, 9),
+        ZakljucenoUtc = closed ? new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero) : null
     };
 
-    public static IReadOnlyList<PpAparatRecord> Records(string konto, int month = 8) => [new()
+    public static IzvjestajSnimak Snapshot(IzvjestajPregledRed row) => new(row, Records(row.Konto, row.GrupaId));
+
+    public static IReadOnlyList<PpAparatRecord> Records(string konto, long grupaId = 1) => [new()
     {
-        Konto = konto, Id = 1, Tip = "S 6", PunjenjeKg = 6, SerijskiBroj = konto + "-001",
-        GodinaProizvodnje = 2020, DatumServisa = new DateTime(2026, month, 9),
-        SljedeciServis = new DateTime(2026, month, 9).AddMonths(6),
+        Konto = konto, GrupaId = grupaId, Id = grupaId * 100 + 1, Tip = "S 6", PunjenjeKg = 6,
+        SerijskiBroj = $"{konto}-{grupaId}-001", GodinaProizvodnje = 2020,
+        DatumServisa = new DateTime(2026, 8, 9), SljedeciServis = new DateTime(2027, 2, 9),
         KonstatacijaIspravnosti = "Ispravan", Vozilo = "N/A", IspitivanjeIzvrsio = "Test"
     }];
 
@@ -53,41 +62,65 @@ internal sealed class WindowTestContext : IDisposable
 
 internal sealed class FakeAparatRepository : IPpAparatRepository
 {
-    public Func<string, int, int, CancellationToken, Task<IReadOnlyList<PpAparatRecord>>> Read { get; set; } =
-        (konto, month, _, _) => Task.FromResult(WindowTestContext.Records(konto, month));
-    public Task<IReadOnlyList<PpAparatRecord>> GetForReportAsync(string konto, int month, int year, CancellationToken cancellationToken = default) => Read(konto, month, year, cancellationToken);
-    public Task<long> InsertAsync(PpAparatInput input, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<IReadOnlyList<int>> GetAvailableYearsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<int>>([2026]);
+    public Dictionary<long, IzvjestajSnimak> Snapshots { get; } = [];
+    public Func<long, long, CancellationToken, Task<IzvjestajSnimak>>? Read { get; set; }
+    public List<(PpAparatInput Input, string User)> Inserts { get; } = [];
+    public Func<Task<long>> Insert { get; set; } = () => Task.FromResult(100L);
+    public Task<IzvjestajSnimak> GetForReportAsync(long grupaId, long ocekivanaVerzija, CancellationToken cancellationToken = default) =>
+        Read?.Invoke(grupaId, ocekivanaVerzija, cancellationToken) ?? Task.FromResult(Snapshots[grupaId]);
+    public Task<long> InsertAsync(PpAparatInput input, string korisnickoIme, CancellationToken cancellationToken = default)
+    {
+        Inserts.Add((input, korisnickoIme));
+        return Insert();
+    }
 }
 
-internal sealed record StatusChange(string Konto, int Month, int Year, bool Expected, bool Closed, string User);
+internal sealed record StatusChange(long GrupaId, long Version, string User);
 
 internal sealed class FakeStatusRepository : IIzvjestajEvidencijaRepository
 {
+    public Dictionary<string, IReadOnlyList<IzvjestajPregledRed>> Groups { get; } = [];
     public List<StatusChange> Changes { get; } = [];
+    public List<IzvjestajStatusFilter> Filters { get; } = [];
     public Func<Task<IReadOnlyList<IzvjestajPregledRed>>> Overview { get; set; } = () => Task.FromResult<IReadOnlyList<IzvjestajPregledRed>>([]);
-    public Task<IReadOnlyList<IzvjestajPregledRed>> GetPregledAsync(int month, int year, IzvjestajStatusFilter statusFilter, CancellationToken cancellationToken = default) => Overview();
-    public Task PromijeniStatusAsync(string konto, int month, int year, bool ocekivanoZakljucen, bool zakljucen, string korisnickoIme, CancellationToken cancellationToken = default)
+    public Func<string, CancellationToken, Task<IReadOnlyList<IzvjestajPregledRed>>>? History { get; set; }
+    public Func<Task> Close { get; set; } = () => Task.CompletedTask;
+    public Task<IReadOnlyList<IzvjestajPregledRed>> GetPregledAsync(IzvjestajStatusFilter statusFilter, CancellationToken cancellationToken = default)
     {
-        Changes.Add(new(konto, month, year, ocekivanoZakljucen, zakljucen, korisnickoIme));
-        return Task.CompletedTask;
+        Filters.Add(statusFilter);
+        return Overview();
+    }
+    public Task<IReadOnlyList<IzvjestajPregledRed>> GetHistorijaAsync(string konto, CancellationToken cancellationToken = default) =>
+        History?.Invoke(konto, cancellationToken) ?? Task.FromResult(Groups[konto]);
+    public Task ZakljuciAsync(long grupaId, long ocekivanaVerzija, string korisnickoIme, CancellationToken cancellationToken = default)
+    {
+        Changes.Add(new(grupaId, ocekivanaVerzija, korisnickoIme));
+        return Close();
     }
 }
 
 internal sealed class FakeDocxService : IDocxReportService
 {
     public List<IzvjestajZahtjev> Requests { get; } = [];
+    public Func<Task> Generate { get; set; } = () => Task.CompletedTask;
     public Task GenerateAsync(IzvjestajZahtjev request, string outputPath, CancellationToken cancellationToken = default)
     {
         Requests.Add(request);
-        return Task.CompletedTask;
+        return Generate();
     }
 }
 
 internal sealed class FakeReportDialogs : IReportDialogs
 {
-    public Func<IzvjestajPregledRed, bool, bool> Confirm { get; set; } = (_, _) => true;
+    public Func<IzvjestajPregledRed, bool> Confirm { get; set; } = _ => true;
     public Func<string?> Choose { get; set; } = () => Path.Combine(Path.GetTempPath(), "ppEvidencija-ui-test.docx");
-    public bool ConfirmStatusChange(Window owner, IzvjestajPregledRed selected, bool close) => Confirm(selected, close);
-    public string? ChooseOutputPath(Window owner, string fileName) => Choose();
+    public List<string> Errors { get; } = [];
+    public List<string> FileNames { get; } = [];
+    public bool ConfirmClose(Window owner, IzvjestajPregledRed selected) => Confirm(selected);
+    public string? ChooseOutputPath(Window owner, string fileName)
+    {
+        FileNames.Add(fileName);
+        return Choose();
+    }
+    public void ShowError(Window owner, string message, string title) => Errors.Add(message);
 }

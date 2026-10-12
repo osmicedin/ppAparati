@@ -24,13 +24,12 @@ public sealed class DocxReportServiceTests : IDisposable
     [InlineData("empty")]
     [InlineData("conclusion-before-last-service")]
     [InlineData("wrong-account")]
-    [InlineData("wrong-month")]
-    [InlineData("wrong-year")]
-    [InlineData("month-zero")]
-    [InlineData("month-thirteen")]
-    [InlineData("year-zero")]
-    [InlineData("year-before-supported-range")]
-    [InlineData("year-too-large")]
+    [InlineData("wrong-group")]
+    [InlineData("group-zero")]
+    [InlineData("group-negative")]
+    [InlineData("document-before-supported-range")]
+    [InlineData("service-before-supported-range")]
+    [InlineData("null-item")]
     public async Task InvalidRequestLeavesExistingReportUnchanged(string scenario)
     {
         var request = Request();
@@ -39,13 +38,12 @@ public sealed class DocxReportServiceTests : IDisposable
             "empty" => request with { Aparati = [] },
             "conclusion-before-last-service" => request with { DatumZakljucivanja = new DateTime(2026, 9, 10) },
             "wrong-account" => request with { Kupac = new Konto("B", "Drugi kupac") },
-            "wrong-month" => request with { Mjesec = 8 },
-            "wrong-year" => request with { Godina = 2025 },
-            "month-zero" => request with { Mjesec = 0 },
-            "month-thirteen" => request with { Mjesec = 13 },
-            "year-zero" => request with { Godina = 0 },
-            "year-before-supported-range" => request with { Godina = 1899 },
-            "year-too-large" => request with { Godina = 10000 },
+            "wrong-group" => request with { GrupaId = 43 },
+            "group-zero" => request with { GrupaId = 0 },
+            "group-negative" => request with { GrupaId = -1 },
+            "document-before-supported-range" => request with { DatumZakljucivanja = new DateTime(1899, 12, 31) },
+            "service-before-supported-range" => request with { Aparati = [Item(1, new DateTime(1899, 12, 31))] },
+            "null-item" => request with { Aparati = [null!] },
             _ => throw new ArgumentOutOfRangeException(nameof(scenario))
         };
         var output = ExistingReport();
@@ -89,6 +87,7 @@ public sealed class DocxReportServiceTests : IDisposable
         Assert.Equal("KUPAC A", Text(document, "CustomerTitle"));
         Assert.Equal("01.09.2026.g.", Text(document, "PeriodFrom"));
         Assert.Equal("30.09.2026", Text(document, "PeriodTo"));
+        Assert.Equal("Doboj Jug, septembar 2026.g.", Text(document, "LocationMonthYear"));
         Assert.Equal("2", Text(document, "ConclusionCount"));
         var dataRows = document.MainDocumentPart!.Document!.Descendants<TableRow>()
             .Where(row => row.Elements<TableCell>().FirstOrDefault()?.InnerText is "1" or "2")
@@ -111,6 +110,74 @@ public sealed class DocxReportServiceTests : IDisposable
 
         using var document = WordprocessingDocument.Open(output, false);
         Assert.Equal("20.09.2026", Text(document, "PeriodTo"));
+    }
+
+    [Fact]
+    public async Task GroupSpanningMonthsAndYearsUsesChosenDocumentDateForHeaderAndPeriod()
+    {
+        var output = Path.Combine(_directory, "multiple-years.docx");
+        var request = Request() with
+        {
+            DatumZakljucivanja = new DateTime(2027, 2, 15),
+            Aparati =
+            [
+                Item(1, new DateTime(2025, 12, 31)),
+                Item(2, new DateTime(2026, 9, 20)),
+                Item(3, new DateTime(2027, 1, 5))
+            ]
+        };
+
+        await Service().GenerateAsync(request, output);
+
+        using var document = WordprocessingDocument.Open(output, false);
+        Assert.Equal("31.12.2025.g.", Text(document, "PeriodFrom"));
+        Assert.Equal("15.02.2027", Text(document, "PeriodTo"));
+        Assert.Equal("15.02.2027.g.", Text(document, "ConclusionDate"));
+        Assert.Equal("Doboj Jug, februar 2027.g.", Text(document, "LocationMonthYear"));
+        Assert.Equal("3", Text(document, "ConclusionCount"));
+        Assert.Equal("Konto A, grupa 42, 31.12.2025 - 15.02.2027", document.PackageProperties.Subject);
+        var dataRows = document.MainDocumentPart!.Document!.Descendants<TableRow>()
+            .Where(row => row.Elements<TableCell>().FirstOrDefault()?.InnerText is "1" or "2" or "3")
+            .ToArray();
+        Assert.Equal(3, dataRows.Length);
+        Assert.Equal(["SERIAL-1", "SERIAL-2", "SERIAL-3"],
+            dataRows.Select(row => row.Elements<TableCell>().ElementAt(3).InnerText).ToArray());
+        var errors = new OpenXmlValidator().Validate(document).ToArray();
+        Assert.True(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(error => error.Description)));
+    }
+
+    [Fact]
+    public async Task BackdatedApparatusBelongsToSelectedGroupAndCanBeExportedAgainWithANewDocumentDate()
+    {
+        var output = Path.Combine(_directory, "backdated.docx");
+        var request = Request() with
+        {
+            Aparati = [Item(20), Item(1, new DateTime(2024, 3, 7))]
+        };
+
+        await Service().GenerateAsync(request, output);
+        await Service().GenerateAsync(request with { DatumZakljucivanja = new DateTime(2026, 10, 12) }, output);
+
+        using var document = WordprocessingDocument.Open(output, false);
+        Assert.Equal("07.03.2024.g.", Text(document, "PeriodFrom"));
+        Assert.Equal("12.10.2026", Text(document, "PeriodTo"));
+        Assert.Equal("Doboj Jug, oktobar 2026.g.", Text(document, "LocationMonthYear"));
+        Assert.Equal("2", Text(document, "ConclusionCount"));
+        AssertNoTemporaryReports();
+    }
+
+    [Fact]
+    public async Task FirstSupportedServiceAndDocumentDateIsAllowed()
+    {
+        var output = Path.Combine(_directory, "first-supported-date.docx");
+        var firstDate = new DateTime(1900, 1, 1);
+        var request = Request() with { DatumZakljucivanja = firstDate, Aparati = [Item(1, firstDate)] };
+
+        await Service().GenerateAsync(request, output);
+
+        using var document = WordprocessingDocument.Open(output, false);
+        Assert.Equal("01.01.1900.g.", Text(document, "PeriodFrom"));
+        Assert.Equal("01.01.1900", Text(document, "PeriodTo"));
     }
 
     [Fact]
@@ -183,18 +250,19 @@ public sealed class DocxReportServiceTests : IDisposable
     private void AssertNoTemporaryReports() => Assert.Empty(Directory.GetFiles(_directory, ".ppEvidencija-*.tmp"));
 
     private static IzvjestajZahtjev Request() =>
-        new("TEST-001", new DateTime(2026, 9, 30), new Konto("A", "Kupac A"), 9, 2026, [Item(1), Item(20)]);
+        new("TEST-001", new DateTime(2026, 9, 30), new Konto("A", "Kupac A"), 42, [Item(1), Item(20)]);
 
-    private static PpAparatRecord Item(int day) => new()
+    private static PpAparatRecord Item(int day, DateTime? serviceDate = null) => new()
     {
         Id = day,
+        GrupaId = 42,
         Konto = "A",
         Tip = "S",
         PunjenjeKg = 6,
         SerijskiBroj = $"SERIAL-{day}",
         GodinaProizvodnje = 2020,
-        DatumServisa = new DateTime(2026, 9, day),
-        SljedeciServis = new DateTime(2027, 3, day),
+        DatumServisa = serviceDate ?? new DateTime(2026, 9, day),
+        SljedeciServis = (serviceDate ?? new DateTime(2026, 9, day)).AddMonths(6),
         KonstatacijaIspravnosti = "Ispravan",
         Vozilo = "N/A",
         IspitivanjeIzvrsio = "Test osoba"

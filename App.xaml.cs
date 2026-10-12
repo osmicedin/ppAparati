@@ -63,6 +63,7 @@ public partial class App : System.Windows.Application
 #if DEBUG
     private static async Task GenerateSampleReportAsync(string outputPath)
     {
+        const long sampleGroupId = 1;
         var sampleRows = Enumerable.Range(1, 72)
             .Select(index =>
             {
@@ -70,6 +71,7 @@ public partial class App : System.Windows.Application
                 return new PpAparatRecord
                 {
                     Id = index,
+                    GrupaId = sampleGroupId,
                     Konto = "211000001",
                     Tip = index % 5 == 0 ? "CO2-5" : index % 3 == 0 ? "S-3" : "S-6",
                     PunjenjeKg = index % 5 == 0 ? 5 : index % 3 == 0 ? 3 : 6,
@@ -88,8 +90,7 @@ public partial class App : System.Windows.Application
             "006-TEST/26",
             new DateTime(2026, 7, 31),
             new Konto("211000001", "HIFA OIL DOO"),
-            7,
-            2026,
+            sampleGroupId,
             sampleRows);
 
         await new DocxReportService().GenerateAsync(request, outputPath);

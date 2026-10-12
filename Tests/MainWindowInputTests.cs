@@ -91,7 +91,7 @@ public sealed class MainWindowInputTests
 
             Assert.Null(picker.SelectedDate);
             Assert.Empty(picker.Text);
-            Assert.Contains("ispravan datum zaključivanja", context.Control<TextBlock>("txtIzvjestajStatus").Text);
+            Assert.Contains("ispravan datum dokumenta", context.Control<TextBlock>("txtIzvjestajStatus").Text);
         }));
 
     private static void WithCulture(string name, Action action)

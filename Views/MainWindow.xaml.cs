@@ -22,14 +22,21 @@ public partial class MainWindow : Window
     private readonly IDocxReportService _docxReportService;
     private readonly IReportDialogs _reportDialogs;
     private IzvjestajPregledRed? _odabraniPregled;
+    private IzvjestajPregledRed? _odabranaGrupa;
     private string? _zadnjiDocxPath;
     private CancellationTokenSource? _kontoUnosSearchCancellation;
     private CancellationTokenSource? _pregledKontaCancellation;
     private CancellationTokenSource? _detaljiIzvjestajaCancellation;
+    private CancellationTokenSource? _historijaCancellation;
     private bool _suppressKontoSearch;
     private bool _reportFiltersReady;
     private bool _overviewLoading;
     private bool _reportActionInProgress;
+    private bool _historijaLoading;
+    private bool _detailsLoading;
+    private bool _detailsReady;
+    private bool _suppressHistorijaSelection;
+    private bool _inputInProgress;
 
     public MainWindow(
         AutentifikovaniKorisnik korisnik,
@@ -64,11 +71,8 @@ public partial class MainWindow : Window
             TextBoxBase.TextChangedEvent,
             new TextChangedEventHandler(KontoComboBox_TextChanged));
 
-        cmbMjesec.ItemsSource = KreirajMjesece();
-        cmbMjesec.SelectedIndex = DateTime.Today.Month - 1;
         cmbStatusIzvjestaja.ItemsSource = KreirajStatusFiltere();
         cmbStatusIzvjestaja.SelectedIndex = 0;
-        OsvjeziDostupnostPerioda();
 
         Loaded += MainWindow_Loaded;
     }
@@ -81,20 +85,10 @@ public partial class MainWindow : Window
     private async Task UcitajPocetnePodatkeAsync()
     {
         IsEnabled = false;
-        txtGlobalStatus.Text = "Učitavanje dostupnih godina...";
+        txtGlobalStatus.Text = "Učitavanje kupaca...";
 
         try
         {
-            var years = (await _ppAparatRepository.GetAvailableYearsAsync()).ToList();
-            if (!years.Contains(DateTime.Today.Year))
-            {
-                years.Add(DateTime.Today.Year);
-            }
-
-            years.Sort((left, right) => right.CompareTo(left));
-            cmbGodina.ItemsSource = years;
-            cmbGodina.SelectedItem = DateTime.Today.Year;
-
             _reportFiltersReady = true;
             await UcitajPregledKontaAsync();
         }
@@ -115,6 +109,12 @@ public partial class MainWindow : Window
 
     private async void BtnSnimi_Click(object sender, RoutedEventArgs e)
     {
+        await SnimiAparatAsync();
+    }
+
+    internal async Task SnimiAparatAsync()
+    {
+        if (_inputInProgress || _reportActionInProgress) return;
         txtUnosStatus.Text = string.Empty;
         txtUnosStatus.Foreground = System.Windows.Media.Brushes.Firebrick;
 
@@ -131,17 +131,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        btnSnimi.IsEnabled = false;
+        _inputInProgress = true;
+        OsvjeziDostupnostRadnji();
         txtGlobalStatus.Text = "Snimanje PP aparata...";
 
         try
         {
-            var id = await _ppAparatRepository.InsertAsync(input!);
+            var id = await _ppAparatRepository.InsertAsync(input!, _korisnik.KorisnickoIme);
             txtUnosStatus.Foreground = System.Windows.Media.Brushes.DarkGreen;
             txtUnosStatus.Text = $"PP aparat je uspješno snimljen. ID zapisa: {id}.";
             txtGlobalStatus.Text = "Snimanje završeno.";
             OcistiPoljaUnosa(zadrziKonto: true);
-            await OsvjeziGodineAsync(input!.DatumServisa.Year);
+            await UcitajPregledKontaAsync(_odabraniPregled);
         }
         catch (Exception ex)
         {
@@ -150,7 +151,8 @@ public partial class MainWindow : Window
         }
         finally
         {
-            btnSnimi.IsEnabled = true;
+            _inputInProgress = false;
+            OsvjeziDostupnostRadnji();
         }
     }
 
@@ -349,10 +351,9 @@ public partial class MainWindow : Window
 
     private async void ReportFilter_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        OsvjeziDostupnostPerioda();
         if (_reportFiltersReady)
         {
-            await UcitajPregledKontaAsync();
+            await UcitajPregledKontaAsync(_odabraniPregled);
         }
     }
 
@@ -363,13 +364,8 @@ public partial class MainWindow : Window
 
     internal async Task UcitajPregledKontaAsync(IzvjestajPregledRed? zadrziRed = null)
     {
-        if (!TryGetOverviewFilter(out var month, out var year, out var statusFilter, out var error))
-        {
-            txtPregledKontaStatus.Text = error;
-            ClearSelectedReport();
-            return;
-        }
-
+        var statusFilter = (cmbStatusIzvjestaja.SelectedItem as IzvjestajStatusFilterStavka)?.Vrijednost
+            ?? IzvjestajStatusFilter.Nezakljuceni;
         var cancellation = new CancellationTokenSource();
         _pregledKontaCancellation?.Cancel();
         _pregledKontaCancellation?.Dispose();
@@ -379,82 +375,44 @@ public partial class MainWindow : Window
         _overviewLoading = true;
         dgKontaIzvjestaji.ItemsSource = null;
         ClearSelectedReport();
-        OsvjeziDostupnostRadnji();
         txtPregledKontaStatus.Text = "Učitavanje kupaca...";
         pnlPrazanPregled.Visibility = Visibility.Visible;
         txtPrazanPregled.Text = "Učitavanje kupaca...";
 
         try
         {
-            var rows = await _izvjestajEvidencijaRepository.GetPregledAsync(
-                month,
-                year,
-                statusFilter,
-                token);
+            var rows = await _izvjestajEvidencijaRepository.GetPregledAsync(statusFilter, token);
             token.ThrowIfCancellationRequested();
-
             dgKontaIzvjestaji.ItemsSource = rows;
-
-            var rowToKeep = zadrziRed is null
-                ? null
-                : rows.FirstOrDefault(row => string.Equals(
-                    row.Konto,
-                    zadrziRed.Konto,
-                    StringComparison.Ordinal)
-                    && row.Mjesec == zadrziRed.Mjesec
-                    && row.Godina == zadrziRed.Godina);
-
-            if (rowToKeep is null)
-            {
-                dgKontaIzvjestaji.SelectedItem = null;
-                ClearSelectedReport();
-            }
-            else
+            var rowToKeep = zadrziRed is null ? null : rows.FirstOrDefault(row =>
+                string.Equals(row.Konto, zadrziRed.Konto, StringComparison.OrdinalIgnoreCase));
+            if (rowToKeep is not null)
             {
                 dgKontaIzvjestaji.SelectedItem = rowToKeep;
                 dgKontaIzvjestaji.ScrollIntoView(rowToKeep);
             }
 
-            var prikazSvihNezakljucenih = statusFilter == IzvjestajStatusFilter.Nezakljuceni;
             txtPregledKontaStatus.Text = rows.Count == 0
-                ? prikazSvihNezakljucenih
-                    ? "Nema nezaključenih perioda."
-                    : "Nema kupaca za odabrani period."
-                : prikazSvihNezakljucenih
-                    ? $"Nezaključenih perioda: {rows.Count}."
-                    : $"Prikazano kupaca: {rows.Count}.";
-            pnlPrazanPregled.Visibility = rows.Count == 0
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-            txtPrazanPregled.Text = prikazSvihNezakljucenih
-                ? "Nema nezaključenih perioda."
-                : "Nema kupaca za odabrani period.";
-            txtGlobalStatus.Text = prikazSvihNezakljucenih
-                ? "Učitani su svi nezaključeni periodi."
-                : $"Učitan je pregled za {month:00}/{year}.";
+                ? "Nema kupaca za odabrani status."
+                : $"Prikazano kupaca: {rows.Count}.";
+            pnlPrazanPregled.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            txtPrazanPregled.Text = "Nema kupaca za odabrani status.";
+            txtGlobalStatus.Text = "Pregled kupaca je osvježen.";
         }
         catch (OperationCanceledException)
         {
-            // Nova promjena filtera je zamijenila prethodno učitavanje.
+            // A newer filter/refresh owns the screen now.
         }
         catch (Exception ex)
         {
-            if (!ReferenceEquals(_pregledKontaCancellation, cancellation))
-            {
-                return;
-            }
-
+            if (!ReferenceEquals(_pregledKontaCancellation, cancellation)) return;
             dgKontaIzvjestaji.ItemsSource = null;
             ClearSelectedReport();
             txtPregledKontaStatus.Text = "Pregled kupaca nije učitan.";
             pnlPrazanPregled.Visibility = Visibility.Visible;
             txtPrazanPregled.Text = "Pregled trenutno nije dostupan.";
-            txtGlobalStatus.Text = "Greška pri učitavanju mjesečne evidencije.";
-            MessageBox.Show(
-                $"Nije moguće učitati mjesečnu evidenciju.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
-                "Greška baze",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            txtGlobalStatus.Text = "Greška pri učitavanju evidencije.";
+            _reportDialogs.ShowError(this, $"Nije moguće učitati evidenciju.{Environment.NewLine}{Environment.NewLine}{ex.Message}", "Greška baze");
         }
         finally
         {
@@ -468,113 +426,146 @@ public partial class MainWindow : Window
 
     private async void DgKontaIzvjestaji_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (dgKontaIzvjestaji.SelectedItem is not IzvjestajPregledRed selected)
-        {
-            ClearSelectedReport();
-            return;
-        }
-
+        ClearSelectedReport();
+        if (dgKontaIzvjestaji.SelectedItem is not IzvjestajPregledRed selected) return;
         _odabraniPregled = selected;
         pnlBezOdabranogKupca.Visibility = Visibility.Collapsed;
         pnlOdabraniKupac.Visibility = Visibility.Visible;
-        pnlOdabraniKupac.DataContext = selected;
         txtOdabraniKupac.Text = selected.Kupac.Prikaz;
-        var monthName = NazivMjeseca(selected.Mjesec);
-        txtOdabraniPeriod.Text = $"{monthName} {selected.Godina} • {FormatirajBrojAparata(selected.BrojAparata)}";
-        btnPromijeniStatus.Content = selected.Zakljucen
-            ? "Ponovo otvori"
-            : "Zaključi";
-        btnPromijeniStatus.ToolTip = selected.Zakljucen
-            ? "Dozvoli nove unose za ovaj konto i period."
-            : "Označi izvještaj za ovaj konto i period kao završen.";
-        dgIzvjestaj.ItemsSource = null;
-        OsvjeziDostupnostRadnji();
+        await UcitajHistorijuAsync(selected);
+    }
 
+    private async Task UcitajHistorijuAsync(IzvjestajPregledRed selected)
+    {
+        var cancellation = new CancellationTokenSource();
+        _historijaCancellation?.Cancel();
+        _historijaCancellation?.Dispose();
+        _historijaCancellation = cancellation;
+        var token = cancellation.Token;
+        _historijaLoading = true;
+        txtIzvjestajStatus.Text = "Učitavanje historije...";
+        OsvjeziDostupnostRadnji();
+        try
+        {
+            var groups = await _izvjestajEvidencijaRepository.GetHistorijaAsync(selected.Konto, token);
+            token.ThrowIfCancellationRequested();
+            if (!ReferenceEquals(_odabraniPregled, selected)) return;
+            _suppressHistorijaSelection = true;
+            try
+            {
+                cmbHistorijaIzvjestaja.ItemsSource = groups;
+                // The repository returns the current group first, then immutable history.
+                cmbHistorijaIzvjestaja.SelectedItem = groups.FirstOrDefault();
+            }
+            finally
+            {
+                _suppressHistorijaSelection = false;
+            }
+            _historijaLoading = false;
+            if (cmbHistorijaIzvjestaja.SelectedItem is IzvjestajPregledRed group)
+            {
+                await OdaberiGrupuAsync(group);
+            }
+            else
+            {
+                txtIzvjestajStatus.Text = "Konto nema evidentiranih aparata.";
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (!ReferenceEquals(_historijaCancellation, cancellation) || token.IsCancellationRequested
+                || !ReferenceEquals(_odabraniPregled, selected)) return;
+            txtIzvjestajStatus.Text = "Historija nije učitana. Osvježite pregled.";
+            _reportDialogs.ShowError(this, ex.Message, "Greška historije");
+        }
+        finally
+        {
+            if (ReferenceEquals(_historijaCancellation, cancellation))
+            {
+                _historijaLoading = false;
+                OsvjeziDostupnostRadnji();
+            }
+        }
+    }
+
+    private async void HistorijaIzvjestaja_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressHistorijaSelection) return;
+        if (cmbHistorijaIzvjestaja.SelectedItem is IzvjestajPregledRed group)
+        {
+            await OdaberiGrupuAsync(group);
+        }
+    }
+
+    private async Task OdaberiGrupuAsync(IzvjestajPregledRed group)
+    {
         var cancellation = new CancellationTokenSource();
         _detaljiIzvjestajaCancellation?.Cancel();
         _detaljiIzvjestajaCancellation?.Dispose();
         _detaljiIzvjestajaCancellation = cancellation;
-
+        _odabranaGrupa = group;
+        _detailsReady = false;
+        _detailsLoading = true;
+        dgIzvjestaj.ItemsSource = null;
+        pnlOdabraniKupac.DataContext = group;
+        txtOdabraniPeriod.Text = $"{group.PeriodPrikaz} • {FormatirajBrojAparata(group.BrojAparata)}";
+        btnPromijeniStatus.ToolTip = "Završi trenutni skup aparata. Sljedeći unos automatski otvara novi skup.";
+        OsvjeziDostupnostRadnji();
         try
         {
-            await UcitajIzvjestajAsync(
-                selected,
-                cancellation.Token);
+            await UcitajIzvjestajAsync(group, cancellation.Token);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) { }
+        catch (IzvjestajPromijenjenException ex)
         {
-            // Izabran je drugi kupac prije završetka učitavanja.
+            if (ReferenceEquals(_detaljiIzvjestajaCancellation, cancellation)
+                && !cancellation.IsCancellationRequested && ReferenceEquals(_odabranaGrupa, group))
+            {
+                await UcitajPregledKontaAsync(_odabraniPregled);
+                txtGlobalStatus.Text = ex.Message;
+            }
         }
         catch (Exception ex)
         {
-            if (ReferenceEquals(_odabraniPregled, selected))
+            if (!ReferenceEquals(_detaljiIzvjestajaCancellation, cancellation)
+                || cancellation.IsCancellationRequested || !ReferenceEquals(_odabranaGrupa, group)) return;
+            txtIzvjestajStatus.Text = "Podaci nisu učitani. Osvježite pregled.";
+            _reportDialogs.ShowError(this, ex.Message, "Greška baze");
+        }
+        finally
+        {
+            if (ReferenceEquals(_detaljiIzvjestajaCancellation, cancellation))
             {
-                dgIzvjestaj.ItemsSource = null;
-                txtIzvjestajStatus.Text = "Podaci kupca nisu učitani.";
-                MessageBox.Show(
-                    $"Nije moguće učitati aparate odabranog kupca.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
-                    "Greška baze",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                _detailsLoading = false;
+                OsvjeziDostupnostRadnji();
             }
         }
     }
 
-    private async void BtnPromijeniStatus_Click(object sender, RoutedEventArgs e)
-    {
-        await PromijeniStatusAsync();
-    }
+    private async void BtnPromijeniStatus_Click(object sender, RoutedEventArgs e) => await PromijeniStatusAsync();
 
     internal async Task PromijeniStatusAsync()
     {
-        if (_reportActionInProgress || _overviewLoading)
-        {
-            return;
-        }
-
-        var selected = _odabraniPregled;
-        if (selected is null)
-        {
-            MessageBox.Show(
-                "Odaberite kupca iz tabele.",
-                "Mjesečna evidencija",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
-
-        var noviStatus = !selected.Zakljucen;
+        if (!ReportActionsAvailable || _odabranaGrupa is not { Zakljucen: false } selected) return;
         _reportActionInProgress = true;
         OsvjeziDostupnostRadnji();
-
         try
         {
-            if (!_reportDialogs.ConfirmStatusChange(this, selected, noviStatus))
-            {
-                return;
-            }
-
-            txtGlobalStatus.Text = noviStatus ? "Zaključivanje perioda..." : "Ponovno otvaranje perioda...";
-            await _izvjestajEvidencijaRepository.PromijeniStatusAsync(
-                selected.Konto,
-                selected.Mjesec,
-                selected.Godina,
-                selected.Zakljucen,
-                noviStatus,
-                _korisnik.KorisnickoIme);
-
+            if (!_reportDialogs.ConfirmClose(this, selected)) return;
+            txtGlobalStatus.Text = "Zaključivanje konta...";
+            await _izvjestajEvidencijaRepository.ZakljuciAsync(selected.GrupaId, selected.Verzija, _korisnik.KorisnickoIme);
             await UcitajPregledKontaAsync(selected);
-            txtGlobalStatus.Text = noviStatus
-                ? "Period je uspješno zaključen."
-                : "Period je uspješno ponovo otvoren.";
+            txtGlobalStatus.Text = "Skup aparata je zaključen. Novi unos automatski otvara novi skup.";
+        }
+        catch (IzvjestajPromijenjenException ex)
+        {
+            await UcitajPregledKontaAsync(selected);
+            txtGlobalStatus.Text = ex.Message;
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                $"Status perioda nije promijenjen.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
-                "Mjesečna evidencija",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            _reportDialogs.ShowError(this, $"Konto nije zaključen.{Environment.NewLine}{Environment.NewLine}{ex.Message}", "Zaključivanje konta");
             await UcitajPregledKontaAsync(selected);
         }
         finally
@@ -584,77 +575,52 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void BtnGenerisiDocx_Click(object sender, RoutedEventArgs e)
-    {
-        await GenerisiDocxAsync();
-    }
+    private async void BtnGenerisiDocx_Click(object sender, RoutedEventArgs e) => await GenerisiDocxAsync();
 
     internal async Task GenerisiDocxAsync()
     {
-        if (_reportActionInProgress || _overviewLoading)
-        {
-            return;
-        }
-
-        if (!TryGetReportFilter(out var konto, out var month, out var year, out var filterError))
-        {
-            MessageBox.Show(filterError, "Provjera podataka", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
+        if (!ReportActionsAvailable || _odabranaGrupa is not IzvjestajPregledRed selected) return;
         if (dpDatumZakljucivanja.SelectedDate is not DateTime datumZakljucivanja)
         {
-            MessageBox.Show("Odaberite datum zaključivanja.", "Provjera podataka", MessageBoxButton.OK, MessageBoxImage.Warning);
+            txtIzvjestajStatus.Text = "Odaberite datum dokumenta.";
             return;
         }
-
         _reportActionInProgress = true;
         OsvjeziDostupnostRadnji();
         txtIzvjestajStatus.Text = "Priprema izvještaja...";
-
         try
         {
-            var aparati = (await _ppAparatRepository.GetForReportAsync(konto!.Sifra, month, year)).ToArray();
+            var snapshot = await _ppAparatRepository.GetForReportAsync(selected.GrupaId, selected.Verzija);
+            var aparati = snapshot.Aparati.ToArray();
             if (aparati.Length == 0)
             {
-                MessageBox.Show(
-                    "Za odabrani konto, mjesec i godinu nema podataka.",
-                    "Nema podataka",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                txtIzvjestajStatus.Text = "Izabrani skup nema aparata.";
                 return;
             }
-
-            var outputPath = _reportDialogs.ChooseOutputPath(
-                this, $"Zapisnik_{SafeFileName(konto.Sifra)}_{year}-{month:00}.docx");
+            var outputPath = _reportDialogs.ChooseOutputPath(this,
+                $"Zapisnik_{SafeFileName(snapshot.Grupa.Konto)}_skup-{snapshot.Grupa.GrupaId}.docx");
             if (outputPath is null)
             {
                 txtIzvjestajStatus.Text = "Generisanje je otkazano.";
                 return;
             }
-
-            var request = new IzvjestajZahtjev(
-                string.Empty,
-                datumZakljucivanja.Date,
-                konto!,
-                month,
-                year,
-                aparati);
-
+            var request = new IzvjestajZahtjev(string.Empty, datumZakljucivanja.Date,
+                snapshot.Grupa.Kupac, snapshot.Grupa.GrupaId, aparati);
             await _docxReportService.GenerateAsync(request, outputPath);
             _zadnjiDocxPath = outputPath;
             btnOtvoriWord.IsEnabled = true;
             txtIzvjestajStatus.Text = $"Dokument je sačuvan: {Path.GetFileName(outputPath)}";
             txtGlobalStatus.Text = "DOCX izvještaj je generisan.";
         }
+        catch (IzvjestajPromijenjenException ex)
+        {
+            await UcitajPregledKontaAsync(selected);
+            txtGlobalStatus.Text = ex.Message;
+        }
         catch (Exception ex)
         {
             txtIzvjestajStatus.Text = "Generisanje nije uspjelo.";
-            MessageBox.Show(
-                $"Nije moguće generisati DOCX.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
-                "Greška izvještaja",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            _reportDialogs.ShowError(this, $"Nije moguće generisati DOCX.{Environment.NewLine}{Environment.NewLine}{ex.Message}", "Greška izvještaja");
         }
         finally
         {
@@ -667,130 +633,44 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(_zadnjiDocxPath) || !File.Exists(_zadnjiDocxPath))
         {
-            MessageBox.Show("Generisani dokument više nije dostupan.", "Dokument", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _reportDialogs.ShowError(this, "Generisani dokument više nije dostupan.", "Dokument");
             return;
         }
-
         try
         {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = _zadnjiDocxPath,
-                UseShellExecute = true
-            });
+            Process.Start(new ProcessStartInfo { FileName = _zadnjiDocxPath, UseShellExecute = true });
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
+            _reportDialogs.ShowError(this,
                 $"Dokument je sačuvan, ali ga nije moguće otvoriti. Provjerite da li je Word instaliran.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
-                "Otvaranje dokumenta",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+                "Otvaranje dokumenta");
         }
     }
 
-    internal async Task UcitajIzvjestajAsync(
-        IzvjestajPregledRed selected,
-        CancellationToken cancellationToken = default)
+    internal async Task UcitajIzvjestajAsync(IzvjestajPregledRed selected, CancellationToken cancellationToken = default)
     {
         txtIzvjestajStatus.Text = "Učitavanje podataka...";
-        var aparati = await _ppAparatRepository.GetForReportAsync(
-            selected.Konto,
-            selected.Mjesec,
-            selected.Godina,
-            cancellationToken);
+        var snapshot = await _ppAparatRepository.GetForReportAsync(selected.GrupaId, selected.Verzija, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        if (!ReferenceEquals(_odabraniPregled, selected))
-        {
-            return;
-        }
-
-        dgIzvjestaj.ItemsSource = aparati
-            .Select((item, index) => new IzvjestajRed(index + 1, item))
-            .ToList();
-        txtIzvjestajStatus.Text = aparati.Count == 0
-            ? "Nema podataka za odabrani period."
-            : $"Pronađeno zapisa: {aparati.Count}.";
-    }
-
-    private bool TryGetReportFilter(
-        out Konto? konto,
-        out int month,
-        out int year,
-        out string error)
-    {
-        konto = _odabraniPregled?.Kupac;
-        month = _odabraniPregled?.Mjesec ?? 0;
-        year = _odabraniPregled?.Godina ?? 0;
-        error = string.Empty;
-
-        if (konto is null)
-        {
-            error = "Odaberite kupca iz tabele mjesečne evidencije.";
-            return false;
-        }
-
-        if (year is < 1900 or > 9999)
-        {
-            error = "Osvježite pregled za ispravnu godinu.";
-            return false;
-        }
-
-        if (month is < 1 or > 12)
-        {
-            error = "Odaberite mjesec.";
-            return false;
-        }
-
-        return true;
-    }
-
-    private bool TryGetOverviewFilter(
-        out int month,
-        out int year,
-        out IzvjestajStatusFilter statusFilter,
-        out string error)
-    {
-        month = (cmbMjesec.SelectedItem as MjesecStavka)?.Broj ?? 0;
-        year = cmbGodina.SelectedItem is int selectedYear ? selectedYear : 0;
-        statusFilter = (cmbStatusIzvjestaja.SelectedItem as IzvjestajStatusFilterStavka)?.Vrijednost
-            ?? IzvjestajStatusFilter.Nezakljuceni;
-        error = string.Empty;
-
-        if (month is < 1 or > 12)
-        {
-            error = "Odaberite mjesec.";
-            return false;
-        }
-
-        if (year is < 1900 or > 9999)
-        {
-            error = "Odaberite ispravnu godinu.";
-            return false;
-        }
-
-        return true;
-    }
-
-    private void OsvjeziDostupnostPerioda()
-    {
-        var prikazSvihNezakljucenih =
-            (cmbStatusIzvjestaja.SelectedItem as IzvjestajStatusFilterStavka)?.Vrijednost
-            == IzvjestajStatusFilter.Nezakljuceni;
-
-        cmbMjesec.IsEnabled = !prikazSvihNezakljucenih && !_reportActionInProgress;
-        cmbGodina.IsEnabled = !prikazSvihNezakljucenih && !_reportActionInProgress;
-        var tooltip = prikazSvihNezakljucenih
-            ? "Za nezaključene se prikazuju svi mjeseci i godine."
-            : null;
-        cmbMjesec.ToolTip = tooltip;
-        cmbGodina.ToolTip = tooltip;
+        if (!ReferenceEquals(_odabranaGrupa, selected)) return;
+        dgIzvjestaj.ItemsSource = snapshot.Aparati.Select((item, index) => new IzvjestajRed(index + 1, item)).ToList();
+        _detailsReady = snapshot.Aparati.Count > 0;
+        txtIzvjestajStatus.Text = $"Pronađeno zapisa: {snapshot.Aparati.Count}.";
     }
 
     private void ClearSelectedReport()
     {
+        _historijaCancellation?.Cancel();
         _detaljiIzvjestajaCancellation?.Cancel();
         _odabraniPregled = null;
+        _odabranaGrupa = null;
+        _historijaLoading = false;
+        _detailsLoading = false;
+        _detailsReady = false;
+        _suppressHistorijaSelection = true;
+        try { cmbHistorijaIzvjestaja.ItemsSource = null; }
+        finally { _suppressHistorijaSelection = false; }
         dgIzvjestaj.ItemsSource = null;
         pnlOdabraniKupac.DataContext = null;
         pnlOdabraniKupac.Visibility = Visibility.Collapsed;
@@ -798,48 +678,25 @@ public partial class MainWindow : Window
         txtOdabraniKupac.Text = string.Empty;
         txtOdabraniPeriod.Text = string.Empty;
         txtIzvjestajStatus.Text = string.Empty;
-        btnPromijeniStatus.Content = "Zaključi";
         btnPromijeniStatus.ToolTip = null;
         OsvjeziDostupnostRadnji();
     }
 
+    private bool ReportActionsAvailable => !_overviewLoading && !_reportActionInProgress
+        && !_inputInProgress && !_historijaLoading && !_detailsLoading && _detailsReady;
+
     private void OsvjeziDostupnostRadnji()
     {
-        var available = !_overviewLoading && !_reportActionInProgress;
-        btnPromijeniStatus.IsEnabled = available && _odabraniPregled is not null;
-        btnGenerisiDocx.IsEnabled = available && _odabraniPregled is not null;
+        var available = !_overviewLoading && !_reportActionInProgress && !_inputInProgress;
+        btnPromijeniStatus.IsEnabled = ReportActionsAvailable && _odabranaGrupa is { Zakljucen: false };
+        btnGenerisiDocx.IsEnabled = ReportActionsAvailable && _odabranaGrupa is not null;
         btnOsvjeziPregledKonta.IsEnabled = available;
         dgKontaIzvjestaji.IsEnabled = available;
-        cmbStatusIzvjestaja.IsEnabled = !_reportActionInProgress;
+        cmbHistorijaIzvjestaja.IsEnabled = available && !_historijaLoading;
+        cmbStatusIzvjestaja.IsEnabled = !_reportActionInProgress && !_inputInProgress;
         dpDatumZakljucivanja.IsEnabled = !_reportActionInProgress;
-        OsvjeziDostupnostPerioda();
+        btnSnimi.IsEnabled = !_inputInProgress && !_reportActionInProgress;
     }
-
-    private async Task OsvjeziGodineAsync(int newYear)
-    {
-        var years = (cmbGodina.ItemsSource as IEnumerable<int>)?.ToList() ?? [];
-        if (!years.Contains(newYear))
-        {
-            var selectedYear = cmbGodina.SelectedItem is int currentYear
-                ? currentYear
-                : DateTime.Today.Year;
-            years.Add(newYear);
-            years.Sort((left, right) => right.CompareTo(left));
-            _reportFiltersReady = false;
-            try
-            {
-                cmbGodina.ItemsSource = years;
-                cmbGodina.SelectedItem = selectedYear;
-            }
-            finally
-            {
-                _reportFiltersReady = true;
-            }
-        }
-
-        await Task.CompletedTask;
-    }
-
     private void DpDatumServisa_SelectedDateChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (dpDatumServisa.SelectedDate is DateTime selected && !ServiceDateRange.Contains(selected))
@@ -885,25 +742,9 @@ public partial class MainWindow : Window
         }
         else
         {
-            txtIzvjestajStatus.Text = "Unesite ispravan datum zaključivanja (dd.MM.yyyy), od 01.01.1900.";
+            txtIzvjestajStatus.Text = "Unesite ispravan datum dokumenta (dd.MM.yyyy), od 01.01.1900.";
         }
     }
-
-    private static IReadOnlyList<MjesecStavka> KreirajMjesece() =>
-    [
-        new(1, "Januar"),
-        new(2, "Februar"),
-        new(3, "Mart"),
-        new(4, "April"),
-        new(5, "Maj"),
-        new(6, "Juni"),
-        new(7, "Juli"),
-        new(8, "August"),
-        new(9, "Septembar"),
-        new(10, "Oktobar"),
-        new(11, "Novembar"),
-        new(12, "Decembar")
-    ];
 
     private static IReadOnlyList<IzvjestajStatusFilterStavka> KreirajStatusFiltere() =>
     [
@@ -917,10 +758,6 @@ public partial class MainWindow : Window
         1 => "1 aparat",
         _ => $"{count} aparata"
     };
-
-    private static string NazivMjeseca(int month) =>
-        KreirajMjesece().FirstOrDefault(item => item.Broj == month)?.Naziv
-        ?? $"{month:00}. mjesec";
 
     private static string SafeFileName(string value)
     {

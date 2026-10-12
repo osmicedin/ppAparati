@@ -5,6 +5,7 @@ namespace PpEvidencija.Views;
 
 public interface IReportDialogs
 {
-    bool ConfirmStatusChange(Window owner, IzvjestajPregledRed selected, bool close);
+    bool ConfirmClose(Window owner, IzvjestajPregledRed selected);
     string? ChooseOutputPath(Window owner, string fileName);
+    void ShowError(Window owner, string message, string title);
 }

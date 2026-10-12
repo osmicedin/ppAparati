@@ -3,6 +3,7 @@ namespace PpEvidencija.Models;
 public sealed class PpAparatRecord
 {
     public long Id { get; init; }
+    public long GrupaId { get; init; }
     public string Konto { get; init; } = string.Empty;
     public string Tip { get; init; } = string.Empty;
     public decimal PunjenjeKg { get; init; }

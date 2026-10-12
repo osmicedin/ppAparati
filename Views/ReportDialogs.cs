@@ -6,17 +6,19 @@ namespace PpEvidencija.Views;
 
 public sealed class ReportDialogs : IReportDialogs
 {
-    public bool ConfirmStatusChange(Window owner, IzvjestajPregledRed selected, bool close)
+    public bool ConfirmClose(Window owner, IzvjestajPregledRed selected)
     {
-        var action = close ? "zaključiti" : "ponovo otvoriti";
         return MessageBox.Show(
             owner,
-            $"Da li želite {action} period {selected.Mjesec:00}/{selected.Godina} za kupca:{Environment.NewLine}{selected.Kupac.Prikaz}?",
-            close ? "Zaključivanje perioda" : "Ponovno otvaranje perioda",
+            $"Zaključiti {selected.BrojAparata} aparata ({selected.PeriodPrikaz}) za kupca:{Environment.NewLine}{selected.Kupac.Prikaz}?{Environment.NewLine}{Environment.NewLine}Zaključeni skup se ne može ponovo otvoriti. Novi unos započinje novi skup.",
+            "Zaključivanje konta",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question,
             MessageBoxResult.No) == MessageBoxResult.Yes;
     }
+
+    public void ShowError(Window owner, string message, string title) =>
+        MessageBox.Show(owner, message, title, MessageBoxButton.OK, MessageBoxImage.Error);
 
     public string? ChooseOutputPath(Window owner, string fileName)
     {

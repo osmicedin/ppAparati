@@ -87,9 +87,14 @@ public sealed class DocxReportService : IDocxReportService
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Kupac.Sifra);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Kupac.Naziv);
         ArgumentNullException.ThrowIfNull(request.BrojZapisnika);
-        if (request.Mjesec is < 1 or > 12 || request.Godina is < 1900 or > 9999)
+        if (request.GrupaId <= 0)
         {
-            throw new InvalidOperationException("Mjesec ili godina izvještaja nisu ispravni.");
+            throw new InvalidOperationException("Grupa izvještaja nije ispravna.");
+        }
+
+        if (request.DatumZakljucivanja.Year < 1900)
+        {
+            throw new InvalidOperationException("Datum dokumenta mora biti od 01.01.1900. godine.");
         }
 
         if (request.Aparati.Count == 0)
@@ -104,16 +109,21 @@ public sealed class DocxReportService : IDocxReportService
                 throw new InvalidOperationException("Izvještaj sadrži aparat koji ne pripada odabranom kupcu.");
             }
 
-            if (item.DatumServisa.Month != request.Mjesec || item.DatumServisa.Year != request.Godina)
+            if (item.GrupaId != request.GrupaId)
             {
-                throw new InvalidOperationException("Izvještaj sadrži aparat izvan odabranog mjeseca i godine.");
+                throw new InvalidOperationException("Izvještaj sadrži aparat koji ne pripada odabranoj grupi.");
+            }
+
+            if (item.DatumServisa.Year < 1900)
+            {
+                throw new InvalidOperationException("Datum servisa u izvještaju mora biti od 01.01.1900. godine.");
             }
         }
 
         if (request.DatumZakljucivanja.Date < request.Aparati.Max(item => item.DatumServisa).Date)
         {
             throw new InvalidOperationException(
-                "Datum zaključivanja ne može biti prije posljednjeg datuma servisa u izvještaju.");
+                "Datum dokumenta ne može biti prije posljednjeg datuma servisa u izvještaju.");
         }
     }
 
@@ -135,7 +145,7 @@ public sealed class DocxReportService : IDocxReportService
         SetContentControlText(mainPart, "CustomerTitle", request.Kupac.Naziv.Trim().ToUpper(BosnianCulture));
         SetContentControlText(mainPart, "CustomerOrderer", request.Kupac.Naziv.Trim());
         SetContentControlText(mainPart, "CustomerOwner", request.Kupac.Naziv.Trim());
-        SetContentControlText(mainPart, "LocationMonthYear", BuildLocationMonthYear(request.Mjesec, request.Godina));
+        SetContentControlText(mainPart, "LocationMonthYear", BuildLocationMonthYear(to.Month, to.Year));
         SetContentControlText(mainPart, "PeriodFrom", FormatDate(from, includeSuffix: true));
         SetContentControlText(mainPart, "PeriodTo", FormatDate(to, includeSuffix: false));
         SetContentControlText(mainPart, "ConclusionCount", request.Aparati.Count.ToString(CultureInfo.InvariantCulture));
@@ -154,7 +164,7 @@ public sealed class DocxReportService : IDocxReportService
 
         var properties = document.PackageProperties;
         properties.Title = $"Zapisnik PP aparata - {request.Kupac.Naziv}";
-        properties.Subject = $"{request.Mjesec:00}/{request.Godina}";
+        properties.Subject = $"Konto {request.Kupac.Sifra.Trim()}, grupa {request.GrupaId}, {FormatDate(from)} - {FormatDate(to)}";
         properties.Creator = "ppEvidencija";
         properties.Modified = DateTime.UtcNow;
     }
