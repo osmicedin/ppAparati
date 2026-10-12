@@ -143,6 +143,9 @@
                                     <TextBlock Style="{StaticResource FieldLabel}"
                                                Text="Datum servisa *" />
                                     <DatePicker x:Name="dpDatumServisa"
+                                                Language="bs-Latn-BA"
+                                                SelectedDateFormat="Short"
+                                                DateValidationError="Datum_DateValidationError"
                                                 SelectedDateChanged="DpDatumServisa_SelectedDateChanged" />
                                 </StackPanel>
 
@@ -526,6 +529,7 @@
                                     <TextBlock Style="{StaticResource ReportInlineLabel}"
                                                Text="Datum" />
                                     <DatePicker x:Name="dpDatumZakljucivanja"
+                                                SelectedDateChanged="DpDatumZakljucivanja_SelectedDateChanged"
                                                 Width="155"
                                                 Height="38"
                                                 Padding="8,0"
@@ -533,6 +537,7 @@
                                                 VerticalAlignment="Center"
                                                 VerticalContentAlignment="Center"
                                                 SelectedDateFormat="Short"
+                                                DateValidationError="Datum_DateValidationError"
                                                 Language="bs-Latn-BA" />
                                     <Button x:Name="btnGenerisiDocx"
                                             MinWidth="118"

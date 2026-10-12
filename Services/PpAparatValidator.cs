@@ -19,6 +19,10 @@ public sealed class PpAparatValidator
         {
             errors.Add("Punjenje mora biti broj veći od 0 i manji od 1.000.000 kg.");
         }
+        else if (decimal.Round(input.PunjenjeKg, 2) != input.PunjenjeKg)
+        {
+            errors.Add("Punjenje može imati najviše dvije decimale.");
+        }
 
         if (input.GodinaProizvodnje < 1900 || input.GodinaProizvodnje > DateTime.Today.Year)
         {
@@ -28,6 +32,10 @@ public sealed class PpAparatValidator
         if (input.DatumServisa == default)
         {
             errors.Add("Datum servisa je obavezan.");
+        }
+        else if (!ServiceDateRange.Contains(input.DatumServisa))
+        {
+            errors.Add("Datum servisa mora biti između 01.01.1900. i 30.06.9999.");
         }
 
         MaxLength(input.Konto, 20, "Konto", errors);

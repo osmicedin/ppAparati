@@ -136,10 +136,11 @@ public partial class App : System.Windows.Application
                 services.AddSingleton(new SqlConnectionFactory(connectionString));
                 services.AddSingleton<AuthRepository>();
                 services.AddSingleton<KontoRepository>();
-                services.AddSingleton<PpAparatRepository>();
-                services.AddSingleton<IzvjestajEvidencijaRepository>();
+                services.AddSingleton<IPpAparatRepository, PpAparatRepository>();
+                services.AddSingleton<IIzvjestajEvidencijaRepository, IzvjestajEvidencijaRepository>();
                 services.AddSingleton<PpAparatValidator>();
                 services.AddSingleton<IDocxReportService, DocxReportService>();
+                services.AddSingleton<IReportDialogs, ReportDialogs>();
                 services.AddTransient<LoginWindow>();
             })
             .Build();

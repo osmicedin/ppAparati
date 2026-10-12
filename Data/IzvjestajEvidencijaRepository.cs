@@ -5,7 +5,7 @@ using PpEvidencija.Models;
 
 namespace PpEvidencija.Data;
 
-public sealed class IzvjestajEvidencijaRepository
+public sealed class IzvjestajEvidencijaRepository : IIzvjestajEvidencijaRepository
 {
     private readonly SqlConnectionFactory _connectionFactory;
 
@@ -23,7 +23,7 @@ public sealed class IzvjestajEvidencijaRepository
         ValidatePeriod(month, year);
 
         var from = new DateTime(year, month, 1);
-        var to = from.AddMonths(1);
+        var to = new DateTime(year, month, DateTime.DaysInMonth(year, month));
 
         const string sql = """
             WITH period AS
@@ -38,7 +38,7 @@ public sealed class IzvjestajEvidencijaRepository
                    OR
                    (
                        p.datum_servisa >= @from
-                       AND p.datum_servisa < @to
+                       AND p.datum_servisa <= @to
                    )
                 GROUP BY
                     LTRIM(RTRIM(p.konto)),
@@ -111,7 +111,7 @@ public sealed class IzvjestajEvidencijaRepository
         }
 
         var from = new DateTime(year, month, 1);
-        var to = from.AddMonths(1);
+        var to = new DateTime(year, month, DateTime.DaysInMonth(year, month));
 
         const string selectStatusSql = """
             SELECT TOP (1)
@@ -128,7 +128,7 @@ public sealed class IzvjestajEvidencijaRepository
             FROM dbo.ppaparati WITH (HOLDLOCK)
             WHERE konto = @konto
               AND datum_servisa >= @from
-              AND datum_servisa < @to;
+              AND datum_servisa <= @to;
             """;
 
         const string insertStatusSql = """

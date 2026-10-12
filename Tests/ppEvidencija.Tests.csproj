@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <Using Include="Xunit" />
+    <Using Include="System.IO" />
+    <ProjectReference Include="..\ppEvidencija.csproj" />
+    <None Include="..\Templates\ZapisnikTemplate.docx" Link="Templates\ZapisnikTemplate.docx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Sql\Create_ppaparati.sql" Link="Sql\Create_ppaparati.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\App.xaml" Link="Resources\AppSource.xaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

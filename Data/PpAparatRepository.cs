@@ -5,7 +5,7 @@ using PpEvidencija.Models;
 
 namespace PpEvidencija.Data;
 
-public sealed class PpAparatRepository
+public sealed class PpAparatRepository : IPpAparatRepository
 {
     private readonly SqlConnectionFactory _connectionFactory;
 
@@ -16,6 +16,12 @@ public sealed class PpAparatRepository
 
     public async Task<long> InsertAsync(PpAparatInput input, CancellationToken cancellationToken = default)
     {
+        if (!ServiceDateRange.Contains(input.DatumServisa))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(input), "Datum servisa mora biti između 01.01.1900. i 30.06.9999.");
+        }
+
         const string accountExistsSql = """
             SELECT COUNT_BIG(1)
             FROM dbo.konta
@@ -125,7 +131,7 @@ public sealed class PpAparatRepository
         CancellationToken cancellationToken = default)
     {
         var from = new DateTime(year, month, 1);
-        var to = from.AddMonths(1);
+        var to = new DateTime(year, month, DateTime.DaysInMonth(year, month));
 
         const string sql = """
             SELECT
@@ -143,7 +149,7 @@ public sealed class PpAparatRepository
             FROM dbo.ppaparati
             WHERE konto = @konto
               AND datum_servisa >= @from
-              AND datum_servisa < @to
+              AND datum_servisa <= @to
             ORDER BY datum_servisa, id;
             """;
 

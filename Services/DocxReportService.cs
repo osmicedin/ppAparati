@@ -10,6 +10,18 @@ namespace PpEvidencija.Services;
 public sealed class DocxReportService : IDocxReportService
 {
     private static readonly CultureInfo BosnianCulture = CultureInfo.GetCultureInfo("bs-Latn-BA");
+    private readonly string _templatePath;
+
+    public DocxReportService()
+        : this(Path.Combine(AppContext.BaseDirectory, "Templates", "ZapisnikTemplate.docx"))
+    {
+    }
+
+    internal DocxReportService(string templatePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(templatePath);
+        _templatePath = Path.GetFullPath(templatePath);
+    }
 
     public Task GenerateAsync(
         IzvjestajZahtjev request,
@@ -18,27 +30,30 @@ public sealed class DocxReportService : IDocxReportService
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        ArgumentNullException.ThrowIfNull(request.Aparati);
 
-        return Task.Run(() => Generate(request, outputPath, cancellationToken), cancellationToken);
+        var snapshot = request with { Aparati = request.Aparati.ToArray() };
+        return Task.Run(() => Generate(snapshot, outputPath, cancellationToken), cancellationToken);
     }
 
-    private static void Generate(
+    private void Generate(
         IzvjestajZahtjev request,
         string outputPath,
         CancellationToken cancellationToken)
     {
-        if (request.Aparati.Count == 0)
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateRequest(request);
+        if (!File.Exists(_templatePath))
         {
-            throw new InvalidOperationException("Izvještaj nema nijedan PP aparat.");
-        }
-
-        var templatePath = Path.Combine(AppContext.BaseDirectory, "Templates", "ZapisnikTemplate.docx");
-        if (!File.Exists(templatePath))
-        {
-            throw new FileNotFoundException("Nedostaje DOCX predložak izvještaja.", templatePath);
+            throw new FileNotFoundException("Nedostaje DOCX predložak izvještaja.", _templatePath);
         }
 
         var fullOutputPath = Path.GetFullPath(outputPath);
+        if (string.Equals(fullOutputPath, _templatePath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Izvještaj ne može zamijeniti DOCX predložak aplikacije.");
+        }
+
         var outputDirectory = Path.GetDirectoryName(fullOutputPath);
         if (string.IsNullOrWhiteSpace(outputDirectory))
         {
@@ -46,20 +61,75 @@ public sealed class DocxReportService : IDocxReportService
         }
 
         Directory.CreateDirectory(outputDirectory);
-        File.Copy(templatePath, fullOutputPath, overwrite: true);
+        var temporaryPath = Path.Combine(outputDirectory, $".ppEvidencija-{Guid.NewGuid():N}.tmp");
+        try
+        {
+            File.Copy(_templatePath, temporaryPath);
+            PopulateDocument(request, temporaryPath, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
 
-        using var document = WordprocessingDocument.Open(fullOutputPath, true);
+            // The temporary file is in the destination directory, so publication is one rename.
+            // A validation, generation, cancellation or sharing error leaves the old report intact.
+            File.Move(temporaryPath, fullOutputPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
+    }
+
+    private static void ValidateRequest(IzvjestajZahtjev request)
+    {
+        ArgumentNullException.ThrowIfNull(request.Kupac);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Kupac.Sifra);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Kupac.Naziv);
+        ArgumentNullException.ThrowIfNull(request.BrojZapisnika);
+        if (request.Mjesec is < 1 or > 12 || request.Godina is < 1900 or > 9999)
+        {
+            throw new InvalidOperationException("Mjesec ili godina izvještaja nisu ispravni.");
+        }
+
+        if (request.Aparati.Count == 0)
+        {
+            throw new InvalidOperationException("Izvještaj nema nijedan PP aparat.");
+        }
+
+        foreach (var item in request.Aparati)
+        {
+            if (item is null || !string.Equals(item.Konto?.Trim(), request.Kupac.Sifra.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Izvještaj sadrži aparat koji ne pripada odabranom kupcu.");
+            }
+
+            if (item.DatumServisa.Month != request.Mjesec || item.DatumServisa.Year != request.Godina)
+            {
+                throw new InvalidOperationException("Izvještaj sadrži aparat izvan odabranog mjeseca i godine.");
+            }
+        }
+
+        if (request.DatumZakljucivanja.Date < request.Aparati.Max(item => item.DatumServisa).Date)
+        {
+            throw new InvalidOperationException(
+                "Datum zaključivanja ne može biti prije posljednjeg datuma servisa u izvještaju.");
+        }
+    }
+
+    private static void PopulateDocument(
+        IzvjestajZahtjev request,
+        string path,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var document = WordprocessingDocument.Open(path, true);
         var mainPart = document.MainDocumentPart
             ?? throw new InvalidDataException("DOCX predložak nema glavni dio dokumenta.");
+        NormalizeLegacyTemplate(mainPart);
 
         var from = request.Aparati.Min(item => item.DatumServisa).Date;
         var to = request.DatumZakljucivanja.Date;
-        if (to < from)
-        {
-            throw new InvalidOperationException(
-                "Datum zaključivanja ne može biti prije prvog datuma servisa u izvještaju.");
-        }
-
         SetContentControlText(mainPart, "ReportNumber", request.BrojZapisnika.Trim());
         SetContentControlText(mainPart, "ConclusionDate", FormatDate(request.DatumZakljucivanja, includeSuffix: true));
         SetContentControlText(mainPart, "CustomerTitle", request.Kupac.Naziv.Trim().ToUpper(BosnianCulture));
@@ -75,7 +145,7 @@ public sealed class DocxReportService : IDocxReportService
         var settingsPart = mainPart.DocumentSettingsPart ?? mainPart.AddNewPart<DocumentSettingsPart>();
         settingsPart.Settings ??= new Settings();
         settingsPart.Settings.RemoveAllChildren<UpdateFieldsOnOpen>();
-        settingsPart.Settings.AppendChild(new UpdateFieldsOnOpen { Val = true });
+        settingsPart.Settings.AddChild(new UpdateFieldsOnOpen { Val = true }, throwOnError: true);
         settingsPart.Settings.Save();
 
         var documentRoot = mainPart.Document
@@ -87,6 +157,35 @@ public sealed class DocxReportService : IDocxReportService
         properties.Subject = $"{request.Mjesec:00}/{request.Godina}";
         properties.Creator = "ppEvidencija";
         properties.Modified = DateTime.UtcNow;
+    }
+
+    private static void NormalizeLegacyTemplate(MainDocumentPart mainPart)
+    {
+        var documentRoot = mainPart.Document
+            ?? throw new InvalidDataException("DOCX predložak nema glavni XML dokument.");
+        // Existing installations can retain the original template. Its two header paragraphs
+        // contain spacing after alignment; reinsert spacing using the SDK's schema order.
+        foreach (var properties in documentRoot.Descendants<ParagraphProperties>())
+        {
+            var spacing = properties.GetFirstChild<SpacingBetweenLines>();
+            if (spacing is not null)
+            {
+                spacing.Remove();
+                properties.AddChild(spacing, throwOnError: true);
+            }
+        }
+
+        var settings = mainPart.DocumentSettingsPart?.Settings;
+        if (settings is not null)
+        {
+            foreach (var legacySetting in settings.Elements()
+                         .Where(item => item.LocalName == "doNotEmbedSmartTags"
+                             && item.NamespaceUri == "http://schemas.openxmlformats.org/wordprocessingml/2006/main")
+                         .ToList())
+            {
+                legacySetting.Remove();
+            }
+        }
     }
 
     private static void ReplaceReportRows(
@@ -158,8 +257,8 @@ public sealed class DocxReportService : IDocxReportService
             new TableCellVerticalAlignment { Val = TableVerticalAlignmentValues.Center });
 
         var paragraphProperties = new ParagraphProperties(
-            new Justification { Val = alignment },
-            new SpacingBetweenLines { Before = "0", After = "20", Line = "220", LineRule = LineSpacingRuleValues.Auto });
+            new SpacingBetweenLines { Before = "0", After = "20", Line = "220", LineRule = LineSpacingRuleValues.Auto },
+            new Justification { Val = alignment });
 
         var runProperties = new RunProperties(
             new RunFonts { Ascii = "Arial", HighAnsi = "Arial", EastAsia = "Arial" },

@@ -161,7 +161,6 @@ def remove_next_service_notes(document) -> None:
 def set_repeat_table_header(row) -> None:
     tr_pr = row._tr.get_or_add_trPr()
     header = OxmlElement("w:tblHeader")
-    header.set(qn("w:val"), "true")
     tr_pr.append(header)
 
 
@@ -171,12 +170,11 @@ def set_cell_text(cell, text: str, bold: bool = False, size: float = 7.5, center
     paragraph = cell.paragraphs[0]
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER if center else WD_ALIGN_PARAGRAPH.LEFT
     ppr = paragraph._p.get_or_add_pPr()
-    spacing = OxmlElement("w:spacing")
+    spacing = ppr.get_or_add_spacing()
     spacing.set(qn("w:before"), "0")
     spacing.set(qn("w:after"), "0")
     spacing.set(qn("w:line"), "180")
     spacing.set(qn("w:lineRule"), "auto")
-    ppr.append(spacing)
     run = paragraph.add_run(text)
     set_run_font(run, size=size, bold=bold)
 
@@ -196,11 +194,12 @@ def set_table_geometry(table) -> None:
     indent = OxmlElement("w:tblInd")
     indent.set(qn("w:type"), "dxa")
     indent.set(qn("w:w"), "0")
-    tbl_pr.append(indent)
+    tbl_pr.insert_element_before(
+        indent, "w:tblBorders", "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook"
+    )
 
-    layout = OxmlElement("w:tblLayout")
+    layout = tbl_pr.get_or_add_tblLayout()
     layout.set(qn("w:type"), "fixed")
-    tbl_pr.append(layout)
 
     margins = OxmlElement("w:tblCellMar")
     for side in ("top", "left", "bottom", "right"):
@@ -208,7 +207,7 @@ def set_table_geometry(table) -> None:
         margin.set(qn("w:w"), "60")
         margin.set(qn("w:type"), "dxa")
         margins.append(margin)
-    tbl_pr.append(margins)
+    tbl_pr.insert_element_before(margins, "w:tblLook", "w:tblCaption", "w:tblDescription", "w:tblPrChange")
 
     borders = OxmlElement("w:tblBorders")
     for name in ("top", "left", "bottom", "right", "insideH", "insideV"):
@@ -218,7 +217,15 @@ def set_table_geometry(table) -> None:
         border.set(qn("w:space"), "0")
         border.set(qn("w:color"), "000000")
         borders.append(border)
-    tbl_pr.append(borders)
+    tbl_pr.insert_element_before(
+        borders, "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook", "w:tblCaption", "w:tblDescription", "w:tblPrChange"
+    )
+
+    # The bitmask contains these flags and is also valid for the original DOCX format.
+    table_look = tbl_pr.find(qn("w:tblLook"))
+    if table_look is not None:
+        for flag in ("firstRow", "lastRow", "firstColumn", "lastColumn", "noHBand", "noVBand"):
+            table_look.attrib.pop(qn(f"w:{flag}"), None)
 
     grid = table._tbl.tblGrid
     for child in list(grid):
@@ -309,11 +316,20 @@ def replace_table(document) -> None:
 
 def set_document_update_fields(document) -> None:
     settings = document.settings._element
+    for obsolete in settings.findall(qn("w:doNotEmbedSmartTags")):
+        settings.remove(obsolete)
     update = settings.find(qn("w:updateFields"))
     if update is None:
         update = OxmlElement("w:updateFields")
-        settings.append(update)
+    else:
+        settings.remove(update)
     update.set(qn("w:val"), "true")
+    settings.insert_element_before(
+        update, "w:hdrShapeDefaults", "w:footnotePr", "w:endnotePr", "w:compat", "w:docVars", "w:rsids",
+        "m:mathPr", "w:attachedSchema", "w:themeFontLang", "w:clrSchemeMapping", "w:doNotIncludeSubdocsInStats",
+        "w:doNotAutoCompressPictures", "w:forceUpgrade", "w:captions", "w:readModeInkLockDown", "w:smartTagType",
+        "sl:schemaLibrary", "w:shapeDefaults", "w:decimalSymbol", "w:listSeparator"
+    )
 
 
 def build(reference: Path, output: Path) -> None:
