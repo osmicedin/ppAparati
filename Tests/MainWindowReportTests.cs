@@ -7,6 +7,67 @@ namespace PpEvidencija.Tests;
 [Collection("WPF")]
 public sealed class MainWindowReportTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task DocumentDefaultsToLatestServiceDateRegardlessOfInsertionOrder(bool closed) => WpfTestHost.RunAsync(async () =>
+    {
+        using var context = new WindowTestContext();
+        Assert.Null(context.Control<DatePicker>("dpDatumZakljucivanja").SelectedDate);
+        var group = WindowTestContext.Row(closed: closed);
+        var latestServiceDate = new DateTime(2026, 9, 20);
+        var snapshot = new IzvjestajSnimak(group,
+        [
+            DatedRecord(group, 25, new DateTime(2025, 12, 31)),
+            DatedRecord(group, 11, latestServiceDate)
+        ]);
+        context.Aparati.Read = (_, _, _) => Task.FromResult(snapshot);
+        context.Select(group);
+
+        Assert.Equal(latestServiceDate, context.Control<DatePicker>("dpDatumZakljucivanja").SelectedDate);
+        await context.Window.GenerisiDocxAsync();
+
+        Assert.Equal(latestServiceDate, Assert.Single(context.Docx.Requests).DatumZakljucivanja);
+        Assert.Empty(context.Dialogs.Errors);
+    });
+
+    [Fact]
+    public Task ManuallyChangedDocumentDateIsUsedForExport() => WpfTestHost.RunAsync(async () =>
+    {
+        using var context = new WindowTestContext();
+        context.Select(WindowTestContext.Row());
+        var chosenDate = new DateTime(2026, 11, 30);
+        context.Control<DatePicker>("dpDatumZakljucivanja").SelectedDate = chosenDate;
+
+        await context.Window.GenerisiDocxAsync();
+
+        Assert.Equal(chosenDate, Assert.Single(context.Docx.Requests).DatumZakljucivanja);
+    });
+
+    [Fact]
+    public Task HistorySelectionGetsItsOwnLatestServiceDateAndClearingSelectionClearsDate() => WpfTestHost.Run(() =>
+    {
+        using var context = new WindowTestContext();
+        var current = WindowTestContext.Row(grupaId: 10);
+        var historical = WindowTestContext.Row(grupaId: 5, closed: true);
+        var currentDate = new DateTime(2026, 9, 20);
+        var historicalDate = new DateTime(2025, 12, 31);
+        context.Reports.History = (_, _) => Task.FromResult<IReadOnlyList<IzvjestajPregledRed>>([current, historical]);
+        context.Aparati.Read = (id, _, _) => Task.FromResult(id == current.GrupaId
+            ? new IzvjestajSnimak(current, [DatedRecord(current, 30, currentDate)])
+            : new IzvjestajSnimak(historical, [DatedRecord(historical, 20, historicalDate)]));
+        context.Select(current);
+        var date = context.Control<DatePicker>("dpDatumZakljucivanja");
+        Assert.Equal(currentDate, date.SelectedDate);
+        date.SelectedDate = new DateTime(2026, 10, 10);
+
+        context.Control<ComboBox>("cmbHistorijaIzvjestaja").SelectedItem = historical;
+
+        Assert.Equal(historicalDate, date.SelectedDate);
+        context.Control<DataGrid>("dgKontaIzvjestaji").SelectedItem = null;
+        Assert.Null(date.SelectedDate);
+    });
+
     [Fact]
     public Task OverviewHasOnlyStatusFilterAndNoMonthlyColumn() => WpfTestHost.RunAsync(async () =>
     {
@@ -355,6 +416,7 @@ public sealed class MainWindowReportTests
         context.Control<TextBox>("txtPunjenje").Text = "6";
         context.Control<TextBox>("txtSerijskiBroj").Text = "A-NEW";
         context.Control<TextBox>("txtVozilo").Text = "N/A";
+        context.Control<TextBox>("txtIspitivanjeIzvrsio").Text = "Test inspector";
         context.Control<DatePicker>("dpDatumServisa").SelectedDate = new DateTime(2025, 1, 1);
         context.Control<TextBox>("txtGodinaProizvodnje").Text = "2020";
         context.Reports.Overview = () => Task.FromResult<IReadOnlyList<IzvjestajPregledRed>>([current]);
@@ -377,6 +439,14 @@ public sealed class MainWindowReportTests
         Assert.Empty(context.Control<DataGrid>("dgIzvjestaj").Items.Cast<object>());
         Assert.False(context.Control<Button>("btnGenerisiDocx").IsEnabled);
     });
+
+    private static PpAparatRecord DatedRecord(IzvjestajPregledRed group, long id, DateTime serviceDate) => new()
+    {
+        Id = id, GrupaId = group.GrupaId, Konto = group.Konto, DatumServisa = serviceDate,
+        SljedeciServis = serviceDate.AddMonths(6), SerijskiBroj = $"SERIAL-{id}",
+        Tip = "S 6", PunjenjeKg = 6, GodinaProizvodnje = 2020,
+        KonstatacijaIspravnosti = "Ispravan", Vozilo = "N/A", IspitivanjeIzvrsio = "Test inspector"
+    };
 
     private static string VisibleSerial(WindowTestContext context) =>
         Assert.Single(context.Control<DataGrid>("dgIzvjestaj").Items.Cast<IzvjestajRed>()).SerijskiBroj;

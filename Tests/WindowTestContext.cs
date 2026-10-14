@@ -9,18 +9,18 @@ namespace PpEvidencija.Tests;
 
 internal sealed class WindowTestContext : IDisposable
 {
-    public FakeAparatRepository Aparati { get; } = new();
+    public FakeAparatRepository Aparati { get; }
     public FakeStatusRepository Reports { get; } = new();
     public FakeDocxService Docx { get; } = new();
     public FakeReportDialogs Dialogs { get; } = new();
     public MainWindow Window { get; }
 
-    public WindowTestContext()
+    public WindowTestContext(AutentifikovaniKorisnik? user = null, FakeAparatRepository? aparati = null)
     {
-        Window = new MainWindow(new("tester", "tester", "Test", "User"),
+        Aparati = aparati ?? new FakeAparatRepository();
+        Window = new MainWindow(user ?? new("tester", "tester", "Test", "User"),
             new KontoRepository(new ErpConnectionFactory("Server=invalid;Integrated Security=true")),
             Aparati, Reports, new PpAparatValidator(), Docx, Dialogs);
-        Control<DatePicker>("dpDatumZakljucivanja").SelectedDate = new DateTime(2026, 9, 30);
     }
 
     public T Control<T>(string name) where T : FrameworkElement => (T)Window.FindName(name);
@@ -66,12 +66,18 @@ internal sealed class FakeAparatRepository : IPpAparatRepository
     public Func<long, long, CancellationToken, Task<IzvjestajSnimak>>? Read { get; set; }
     public List<(PpAparatInput Input, string User)> Inserts { get; } = [];
     public Func<Task<long>> Insert { get; set; } = () => Task.FromResult(100L);
+    public string? LastInspector { get; set; }
+    public Func<CancellationToken, Task<string?>>? ReadLastInspector { get; set; }
+    public Task<string?> GetLastInspectorAsync(CancellationToken cancellationToken = default) =>
+        ReadLastInspector?.Invoke(cancellationToken) ?? Task.FromResult(LastInspector);
     public Task<IzvjestajSnimak> GetForReportAsync(long grupaId, long ocekivanaVerzija, CancellationToken cancellationToken = default) =>
         Read?.Invoke(grupaId, ocekivanaVerzija, cancellationToken) ?? Task.FromResult(Snapshots[grupaId]);
-    public Task<long> InsertAsync(PpAparatInput input, string korisnickoIme, CancellationToken cancellationToken = default)
+    public async Task<long> InsertAsync(PpAparatInput input, string korisnickoIme, CancellationToken cancellationToken = default)
     {
         Inserts.Add((input, korisnickoIme));
-        return Insert();
+        var id = await Insert();
+        LastInspector = input.IspitivanjeIzvrsio;
+        return id;
     }
 }
 

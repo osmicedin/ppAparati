@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private IzvjestajPregledRed? _odabraniPregled;
     private IzvjestajPregledRed? _odabranaGrupa;
     private string? _zadnjiDocxPath;
+    private string _lastInspector = string.Empty;
     private CancellationTokenSource? _kontoUnosSearchCancellation;
     private CancellationTokenSource? _pregledKontaCancellation;
     private CancellationTokenSource? _detaljiIzvjestajaCancellation;
@@ -61,10 +62,9 @@ public partial class MainWindow : Window
         dpDatumServisa.DisplayDateEnd = ServiceDateRange.Maximum;
         dpDatumServisa.SelectedDate = DateTime.Today;
         dpDatumZakljucivanja.DisplayDateStart = ServiceDateRange.Minimum;
-        dpDatumZakljucivanja.SelectedDate = DateTime.Today;
         txtGodinaProizvodnje.Text = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
         txtKonstatacija.Text = "Ispravan";
-        txtIspitivanjeIzvrsio.Text = _korisnik.PunoIme;
+        txtIspitivanjeIzvrsio.Text = _lastInspector;
         cmbTip.ItemsSource = new[] { "S 1", "S 2", "S 3", "S 6", "S 9", "Co2", "S 50" };
 
         cmbKontoUnos.AddHandler(
@@ -82,24 +82,24 @@ public partial class MainWindow : Window
         await UcitajPocetnePodatkeAsync();
     }
 
-    private async Task UcitajPocetnePodatkeAsync()
+    internal async Task UcitajPocetnePodatkeAsync()
     {
         IsEnabled = false;
-        txtGlobalStatus.Text = "Učitavanje kupaca...";
+        txtGlobalStatus.Text = "Učitavanje početnih podataka...";
 
         try
         {
+            _lastInspector = (await _ppAparatRepository.GetLastInspectorAsync())?.Trim() ?? string.Empty;
+            txtIspitivanjeIzvrsio.Text = _lastInspector;
             _reportFiltersReady = true;
             await UcitajPregledKontaAsync();
         }
         catch (Exception ex)
         {
             txtGlobalStatus.Text = "Početni podaci nisu učitani.";
-            MessageBox.Show(
+            _reportDialogs.ShowError(this,
                 $"Nije moguće učitati početne podatke.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
-                "Greška baze",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+                "Greška baze");
         }
         finally
         {
@@ -138,6 +138,7 @@ public partial class MainWindow : Window
         try
         {
             var id = await _ppAparatRepository.InsertAsync(input!, _korisnik.KorisnickoIme);
+            _lastInspector = input!.IspitivanjeIzvrsio;
             txtUnosStatus.Foreground = System.Windows.Media.Brushes.DarkGreen;
             txtUnosStatus.Text = $"PP aparat je uspješno snimljen. ID zapisa: {id}.";
             txtGlobalStatus.Text = "Snimanje završeno.";
@@ -162,7 +163,7 @@ public partial class MainWindow : Window
         txtUnosStatus.Text = string.Empty;
     }
 
-    private void OcistiPoljaUnosa(bool zadrziKonto)
+    internal void OcistiPoljaUnosa(bool zadrziKonto)
     {
         if (!zadrziKonto)
         {
@@ -177,7 +178,7 @@ public partial class MainWindow : Window
         dpDatumServisa.SelectedDate = DateTime.Today;
         txtKonstatacija.Text = "Ispravan";
         txtVozilo.Clear();
-        txtIspitivanjeIzvrsio.Text = _korisnik.PunoIme;
+        txtIspitivanjeIzvrsio.Text = _lastInspector;
         cmbTip.Focus();
     }
 
@@ -524,6 +525,7 @@ public partial class MainWindow : Window
         _detailsReady = false;
         _detailsLoading = true;
         dgIzvjestaj.ItemsSource = null;
+        dpDatumZakljucivanja.SelectedDate = null;
         pnlOdabraniKupac.DataContext = group;
         txtOdabraniPeriod.Text = $"{group.PeriodPrikaz} • {FormatirajBrojAparata(group.BrojAparata)}";
         btnPromijeniStatus.ToolTip = "Završi trenutni skup aparata. Sljedeći unos automatski otvara novi skup.";
@@ -672,6 +674,7 @@ public partial class MainWindow : Window
         cancellationToken.ThrowIfCancellationRequested();
         if (!ReferenceEquals(_odabranaGrupa, selected)) return;
         dgIzvjestaj.ItemsSource = snapshot.Aparati.Select((item, index) => new IzvjestajRed(index + 1, item)).ToList();
+        dpDatumZakljucivanja.SelectedDate = snapshot.Aparati.Max(item => (DateTime?)item.DatumServisa.Date);
         _detailsReady = snapshot.Aparati.Count > 0;
         txtIzvjestajStatus.Text = $"Pronađeno zapisa: {snapshot.Aparati.Count}.";
     }
@@ -690,6 +693,7 @@ public partial class MainWindow : Window
         finally { _suppressHistorijaSelection = false; }
         dgIzvjestaj.ItemsSource = null;
         pnlOdabraniKupac.DataContext = null;
+        dpDatumZakljucivanja.SelectedDate = null;
         pnlOdabraniKupac.Visibility = Visibility.Collapsed;
         pnlBezOdabranogKupca.Visibility = Visibility.Visible;
         txtOdabraniKupac.Text = string.Empty;

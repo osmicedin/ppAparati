@@ -33,6 +33,8 @@ Svi upiti konta imaju uslov `konto LIKE '211%'`, uključujući provjeru prije sn
 
 Svaki zapis u `ppaparati` pripada jednoj grupi u `ppaparati_grupe`. Grupa pripada jednom kontu, čuva status i verziju, a promjene statusa imaju vlastitu historiju. Baza dozvoljava najviše jednu otvorenu grupu po kontu. Tabele `ppaparati_status` i `ppaparati_status_audit` ostaju sačuvane zbog historije mjesečnih zaključivanja. Ranije kopirane `a_user` i `konta`, kao i nepovezane tabele u `evidencija`, ostaju sačuvane, ali ih aplikacija ne koristi.
 
+Polje **Ispitivanje izvršio** preuzima posljednji sačuvani potpis iz `ppaparati`, po najvećem identifikatoru unosa, nezavisno od prijavljenog korisnika i kupca. Potpis se pamti nakon uspješnog snimanja aparata i koristi pri sljedećim unosima i pokretanjima aplikacije. U praznoj bazi polje ostaje prazno dok se ne unese prvi potpis. Evidencija korisnika koji je izvršio upis ili zaključivanje i dalje prati prijavljeni nalog.
+
 ### Zajednička konfiguracija i zaštita
 
 `pp_erp_config` čuva jedan ERP izvor, šifriranu SQL lozinku, vrijeme izmjene i `rowversion`. Svaka prijava učitava nepromjenjivu kopiju konekcije; otvorene sesije nastavljaju koristiti prethodni izvor do zatvaranja aplikacije. SQL lozinka mora biti unesena pri svakom testiranju i spremanju. Prazna lozinka ili lozinka sastavljena samo od razmaka i drugih praznih znakova odbija se; prethodna lozinka se ne preuzima iz spremljene konfiguracije. Istovremena izmjena druge instalacije odbija zastarjelo spremanje.
@@ -68,7 +70,7 @@ Svaki novi unos ide u otvorenu grupu konta bez obzira na datum servisa. Jedna gr
 
 Odabir konta otvara trenutnu otvorenu grupu ili posljednju zaključenu grupu ako nema otvorene. U detaljima je dostupna historija ranijih zaključivanja s datumom i brojem aparata, za pregled i ponovno generisanje DOCX-a. Prikazuje se raspon datuma servisa odabrane grupe. **Zaključi** je dostupno samo za otvorenu grupu. Nakon unosa i zaključivanja pregled zadržava postojeći statusni filter i odabir konta ako je još vidljivo.
 
-**Sačuvaj DOCX** i **Zaključi** su odvojene radnje: izvoz dokumenta ne mijenja status. Dokument sadrži samo aparate odabranog kupca i grupe. Datum dokumenta bira se pri svakom izvozu i mora biti jednak ili kasniji od posljednjeg uključenog servisa. Period dokumenta počinje najranijim servisom, a završava izabranim datumom dokumenta; mjesec i godina u zaglavlju prate taj datum. Predloženi naziv fajla uključuje konto i identifikator grupe.
+**Sačuvaj DOCX** i **Zaključi** su odvojene radnje: izvoz dokumenta ne mijenja status. Dokument sadrži samo aparate odabranog kupca i grupe. Datum dokumenta automatski se postavlja na najnoviji datum servisa u odabranoj grupi, nezavisno od redoslijeda unosa aparata. Može se ručno promijeniti prije izvoza, ali ne može biti raniji od najnovijeg uključenog servisa. Datum zaključka te mjesec i godina u zaglavlju prate izabrani datum. Period dokumenta počinje najranijim servisom i završava datumom dokumenta. Predloženi naziv fajla uključuje konto i identifikator grupe.
 
 Generisanje prvo priprema privremeni dokument, a postojeći fajl zamjenjuje tek nakon uspjeha; neuspjela ili otkazana priprema čuva prethodni izvještaj i status konta. Ako drugi korisnik u međuvremenu doda aparat ili zaključi grupu, pokušaj zaključivanja zastarjelog pregleda se odbija, prikazuje se poruka i podaci se osvježavaju.
 

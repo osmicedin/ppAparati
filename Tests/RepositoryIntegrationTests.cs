@@ -64,6 +64,49 @@ public sealed class RepositoryIntegrationTests : IClassFixture<RepositoryDatabas
     }
 
     [SqlServerFact]
+    public async Task LastInspectorUsesLatestInsertedRecordAcrossAccountsAndLoginsWithoutAnErpRead()
+    {
+        var firstAccount = await _database.CreateAccountAsync();
+        var secondAccount = await _database.CreateAccountAsync();
+        var firstId = await _database.Records.InsertAsync(
+            Item(firstAccount, new DateTime(2026, 10, 15)) with { IspitivanjeIzvrsio = "Prvi ispitivač" }, "First login");
+        var lastId = await _database.Records.InsertAsync(
+            Item(secondAccount, new DateTime(2023, 1, 15)) with { IspitivanjeIzvrsio = "  Drugi ispitivač  " }, "Different login");
+        Assert.True(lastId > firstId);
+        Assert.Equal("Drugi ispitivač", await _database.Records.GetLastInspectorAsync());
+
+        // A later app instance reads the durable signature independently of its
+        // logged-in user and without needing any ERP connection.
+        var anotherSession = new PpAparatRepository(new EvidencijaConnectionFactory(_database.ConnectionString),
+            new KontoRepository(new ErpConnectionFactory("invalid connection string")));
+        Assert.Equal("Drugi ispitivač", await anotherSession.GetLastInspectorAsync());
+        Assert.Equal("Prvi ispitivač", await _database.ScalarAsync<string>(
+            "SELECT ispitivanje_izvrsio FROM dbo.ppaparati WHERE id=@firstId", new { firstId }));
+    }
+
+    [SqlServerFact]
+    public async Task LastInspectorReturnsNullForEmptyDatabaseAndIgnoresBlankLegacySignatures()
+    {
+        var database = new RepositoryDatabase();
+        await database.InitializeAsync();
+        try
+        {
+            Assert.Null(await database.Records.GetLastInspectorAsync());
+            var account = await database.CreateAccountAsync();
+            var firstId = await database.Records.InsertAsync(
+                Item(account) with { IspitivanjeIzvrsio = "Sačuvani ispitivač" }, "Login");
+            var lastId = await database.Records.InsertAsync(Item(account), "Another login");
+            // Older deployments can contain blank values despite the current constraint.
+            await database.ExecuteAsync("ALTER TABLE dbo.ppaparati NOCHECK CONSTRAINT ALL;");
+            await database.ExecuteAsync("UPDATE dbo.ppaparati SET ispitivanje_izvrsio=N'   ' WHERE id=@lastId", new { lastId });
+            Assert.Equal("Sačuvani ispitivač", await database.Records.GetLastInspectorAsync());
+            await database.ExecuteAsync("UPDATE dbo.ppaparati SET ispitivanje_izvrsio=N'' WHERE id=@firstId", new { firstId });
+            Assert.Null(await database.Records.GetLastInspectorAsync());
+        }
+        finally { await database.DisposeAsync(); }
+    }
+
+    [SqlServerFact]
     public async Task SeparateErpSupportsLoginAndAccountLookupWithoutLocalCopiesAndSurvivesSchemaRerun()
     {
         Assert.Equal(5, await _database.ScalarAsync<int>("""
@@ -515,14 +558,17 @@ public sealed class RepositoryIntegrationTests : IClassFixture<RepositoryDatabas
         var existing = await _database.CreateAccountAsync();
         var first = await _database.CreateAccountAsync();
         await _database.Records.InsertAsync(Item(existing), "Creator");
+        var inspectorBefore = await _database.Records.GetLastInspectorAsync();
         var before = await _database.SnapshotAsync();
         await _database.ExecuteAsync("ALTER TABLE dbo.ppaparati ADD CONSTRAINT RejectTestRecord CHECK (tip <> N'Rejected by test')");
         try
         {
             foreach (var account in new[] { existing, first })
                 Assert.Equal(547, (await Assert.ThrowsAsync<SqlException>(
-                    () => _database.Records.InsertAsync(Item(account) with { Tip = "Rejected by test" }, "Creator"))).Number);
+                    () => _database.Records.InsertAsync(Item(account) with
+                        { Tip = "Rejected by test", IspitivanjeIzvrsio = "Rejected inspector" }, "Creator"))).Number);
             Assert.Equal(before, await _database.SnapshotAsync());
+            Assert.Equal(inspectorBefore, await _database.Records.GetLastInspectorAsync());
         }
         finally { await _database.ExecuteAsync("ALTER TABLE dbo.ppaparati DROP CONSTRAINT RejectTestRecord"); }
     }

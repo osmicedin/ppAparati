@@ -16,6 +16,19 @@ public sealed class PpAparatRepository : IPpAparatRepository
         _accounts = accounts;
     }
 
+    public async Task<string?> GetLastInspectorAsync(CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT TOP (1) LTRIM(RTRIM(ispitivanje_izvrsio))
+            FROM dbo.ppaparati
+            WHERE LEN(LTRIM(RTRIM(ispitivanje_izvrsio))) > 0
+            ORDER BY id DESC;
+            """;
+        await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+        return await connection.QuerySingleOrDefaultAsync<string>(new CommandDefinition(
+            sql, cancellationToken: cancellationToken));
+    }
+
     public async Task<long> InsertAsync(
         PpAparatInput input,
         string korisnickoIme,

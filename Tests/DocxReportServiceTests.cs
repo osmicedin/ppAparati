@@ -113,6 +113,35 @@ public sealed class DocxReportServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task LatestServiceDateSetsHeaderAndPeriodWhenLastInsertedApparatusIsBackdated()
+    {
+        var output = Path.Combine(_directory, "backdated-last-inserted.docx");
+        var apparatus = new[]
+        {
+            Item(20, new DateTime(2025, 12, 31)),
+            Item(1, new DateTime(2026, 9, 20))
+        };
+        var request = Request() with
+        {
+            DatumZakljucivanja = apparatus.Max(item => item.DatumServisa),
+            Aparati = apparatus
+        };
+
+        await Service().GenerateAsync(request, output);
+
+        using var document = WordprocessingDocument.Open(output, false);
+        Assert.Equal("20.09.2026.g.", Text(document, "ConclusionDate"));
+        Assert.Equal("Doboj Jug, septembar 2026.g.", Text(document, "LocationMonthYear"));
+        Assert.Equal("31.12.2025.g.", Text(document, "PeriodFrom"));
+        Assert.Equal("20.09.2026", Text(document, "PeriodTo"));
+        Assert.Equal("Konto A, grupa 42, 31.12.2025 - 20.09.2026", document.PackageProperties.Subject);
+        Assert.Equal("2", Text(document, "ConclusionCount"));
+        var errors = new OpenXmlValidator().Validate(document).ToArray();
+        Assert.True(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(error => error.Description)));
+        AssertNoTemporaryReports();
+    }
+
+    [Fact]
     public async Task GroupSpanningMonthsAndYearsUsesChosenDocumentDateForHeaderAndPeriod()
     {
         var output = Path.Combine(_directory, "multiple-years.docx");
