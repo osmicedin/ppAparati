@@ -35,15 +35,23 @@ public partial class App : System.Windows.Application
             await _host.StartAsync();
 
             var prijava = _host.Services.GetRequiredService<LoginWindow>();
-            if (prijava.ShowDialog() != true || prijava.PrijavljeniKorisnik is null)
+            if (prijava.ShowDialog() != true || prijava.PrijavljeniKorisnik is null || prijava.ErpSession is null)
             {
                 Shutdown();
                 return;
             }
 
-            var glavniProzor = ActivatorUtilities.CreateInstance<MainWindow>(
-                _host.Services,
-                prijava.PrijavljeniKorisnik);
+            // One immutable ERP connection snapshot per authenticated session.
+            var evidencija = _host.Services.GetRequiredService<EvidencijaConnectionFactory>();
+            var konta = new KontoRepository(prijava.ErpSession.ConnectionFactory);
+            var glavniProzor = new MainWindow(
+                prijava.PrijavljeniKorisnik,
+                konta,
+                new PpAparatRepository(evidencija, konta),
+                new IzvjestajEvidencijaRepository(evidencija, konta),
+                _host.Services.GetRequiredService<PpAparatValidator>(),
+                _host.Services.GetRequiredService<IDocxReportService>(),
+                _host.Services.GetRequiredService<IReportDialogs>());
 
             MainWindow = glavniProzor;
             ShutdownMode = ShutdownMode.OnMainWindowClose;
@@ -134,11 +142,8 @@ public partial class App : System.Windows.Application
                     throw new InvalidOperationException("ConnectionStrings:DefaultConnection nije postavljen.");
                 }
 
-                services.AddSingleton(new SqlConnectionFactory(connectionString));
-                services.AddSingleton<AuthRepository>();
-                services.AddSingleton<KontoRepository>();
-                services.AddSingleton<IPpAparatRepository, PpAparatRepository>();
-                services.AddSingleton<IIzvjestajEvidencijaRepository, IzvjestajEvidencijaRepository>();
+                services.AddSingleton(new EvidencijaConnectionFactory(connectionString));
+                services.AddSingleton<IErpConfigurationService, ErpConfigurationService>();
                 services.AddSingleton<PpAparatValidator>();
                 services.AddSingleton<IDocxReportService, DocxReportService>();
                 services.AddSingleton<IReportDialogs, ReportDialogs>();

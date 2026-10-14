@@ -18,6 +18,7 @@
     <ProjectReference Include="..\ppEvidencija.csproj" />
     <None Include="..\Templates\ZapisnikTemplate.docx" Link="Templates\ZapisnikTemplate.docx" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Sql\Create_ppaparati.sql" Link="Sql\Create_ppaparati.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Sql\Configure_erp.sql" Link="Sql\Configure_erp.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\App.xaml" Link="Resources\AppSource.xaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

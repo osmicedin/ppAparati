@@ -18,7 +18,7 @@ internal sealed class WindowTestContext : IDisposable
     public WindowTestContext()
     {
         Window = new MainWindow(new("tester", "tester", "Test", "User"),
-            new KontoRepository(new SqlConnectionFactory("Server=invalid;Integrated Security=true")),
+            new KontoRepository(new ErpConnectionFactory("Server=invalid;Integrated Security=true")),
             Aparati, Reports, new PpAparatValidator(), Docx, Dialogs);
         Control<DatePicker>("dpDatumZakljucivanja").SelectedDate = new DateTime(2026, 9, 30);
     }

@@ -5,9 +5,9 @@ namespace PpEvidencija.Data;
 
 public sealed class AuthRepository
 {
-    private readonly SqlConnectionFactory _connectionFactory;
+    private readonly ErpConnectionFactory _connectionFactory;
 
-    public AuthRepository(SqlConnectionFactory connectionFactory)
+    public AuthRepository(ErpConnectionFactory connectionFactory)
     {
         _connectionFactory = connectionFactory;
     }
@@ -38,10 +38,10 @@ public sealed class AuthRepository
             """;
 
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
-        var row = await connection.QuerySingleOrDefaultAsync<AuthRow>(new CommandDefinition(
+        var row = await ErpQuery.ExecuteAsync(() => connection.QuerySingleOrDefaultAsync<AuthRow>(new CommandDefinition(
             sql,
             new { username },
-            cancellationToken: cancellationToken));
+            cancellationToken: cancellationToken)), cancellationToken);
 
         if (row is null || !row.Aktivan || string.IsNullOrWhiteSpace(password))
         {

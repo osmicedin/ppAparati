@@ -1,3 +1,15 @@
+/* Pokrenuti na instanci s-office1\sqlexpress. Postojece podatke ne brise. */
+USE [master];
+GO
+
+IF DB_ID(N'evidencija') IS NULL
+    EXEC(N'CREATE DATABASE [evidencija]');
+GO
+
+USE [evidencija];
+GO
+
+/* SCHEMA_BEGIN: schema-only batch used by isolated integration tests. */
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 SET ANSI_NULLS ON;
@@ -5,12 +17,14 @@ SET QUOTED_IDENTIFIER ON;
 
 IF DB_NAME() IN (N'master', N'model', N'msdb', N'tempdb')
 BEGIN
-    THROW 50001, 'Skript pokrenite nad glavnom poslovnom bazom, ne nad sistemskom bazom.', 1;
+    THROW 50001, 'Shemu pokrenite nad bazom evidencija, ne nad sistemskom bazom.', 1;
 END;
 
 /* Pokrenuti uz zaustavljene stare verzije aplikacije na svim instalacijama. */
 BEGIN TRY
 BEGIN TRANSACTION;
+
+/* a_user i konta cita aplikacija iz konfigurisanog ERP-a. Postojece kopije se ne mijenjaju. */
 
 /* Preimenuj tabele iz prethodne verzije bez gubitka podataka. */
 IF OBJECT_ID(N'dbo.ppaparati_status', N'U') IS NULL

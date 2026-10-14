@@ -2,7 +2,7 @@ using Microsoft.Data.SqlClient;
 
 namespace PpEvidencija.Data;
 
-public sealed class SqlConnectionFactory
+public class SqlConnectionFactory
 {
     private readonly string _connectionString;
 
@@ -11,7 +11,7 @@ public sealed class SqlConnectionFactory
         _connectionString = connectionString;
     }
 
-    public async Task<SqlConnection> OpenAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<SqlConnection> OpenAsync(CancellationToken cancellationToken = default)
     {
         var connection = new SqlConnection(_connectionString);
         try

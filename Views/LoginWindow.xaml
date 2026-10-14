@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Prijava - Evidencija PP aparata"
         Width="480"
-        Height="540"
+        Height="650"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
         UseLayoutRounding="True"
@@ -11,7 +11,7 @@
         KeyDown="Window_KeyDown">
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="138" />
+            <RowDefinition Height="118" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -39,16 +39,18 @@
 
         <Border Grid.Row="1"
                 Margin="30,-20,30,28"
-                Padding="28,24"
+                Padding="24,20"
                 Style="{StaticResource Card}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="22" />
+                    <RowDefinition Height="14" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="16" />
+                    <RowDefinition Height="12" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -62,13 +64,14 @@
                 <TextBlock Grid.Row="1"
                            Margin="0,4,0,0"
                            Style="{StaticResource HelperText}"
-                           Text="Unesite podatke postojećeg korisničkog naloga." />
+                           Text="Prijavite se svojim ERP korisničkim nalogom." />
 
                 <TextBlock Grid.Row="3"
                            Style="{StaticResource FieldLabel}"
                            Text="Korisničko ime" />
                 <TextBox x:Name="txtKorisnickoIme"
                          Grid.Row="4"
+                         AutomationProperties.Name="Korisničko ime"
                          MaxLength="100" />
 
                 <TextBlock Grid.Row="6"
@@ -76,6 +79,7 @@
                            Text="Lozinka" />
                 <PasswordBox x:Name="txtLozinka"
                              Grid.Row="7"
+                             AutomationProperties.Name="Lozinka"
                              MaxLength="200" />
 
                 <TextBlock x:Name="txtStatus"
@@ -95,7 +99,14 @@
                         Content="Prijava"
                         IsDefault="True"
                         Click="BtnPrijava_Click" />
+                <Button x:Name="btnErpKonfiguracija"
+                        Grid.Row="10"
+                        Margin="0,12,0,0"
+                        HorizontalAlignment="Stretch"
+                        Content="Konfiguracija ERP baze"
+                        Click="BtnErpKonfiguracija_Click" />
             </Grid>
+            </ScrollViewer>
         </Border>
     </Grid>
 </Window>

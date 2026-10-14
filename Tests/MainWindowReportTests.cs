@@ -261,7 +261,8 @@ public sealed class MainWindowReportTests
         Assert.False(context.Control<Button>("btnPromijeniStatus").IsEnabled);
         await context.Window.GenerisiDocxAsync();
         Assert.Equal(5, Assert.Single(context.Docx.Requests).GrupaId);
-        Assert.Equal("Zapisnik_A_skup-5.docx", Assert.Single(context.Dialogs.FileNames));
+        var today = DateTime.Today.ToString("dd.MM.yyyy", System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal($"aparati_A_{today}_5.docx", Assert.Single(context.Dialogs.FileNames));
         Assert.Empty(context.Reports.Changes);
         Assert.False(((IzvjestajPregledRed)context.Control<DataGrid>("dgKontaIzvjestaji").SelectedItem).Zakljucen);
     });

@@ -251,6 +251,18 @@
                         <Setter Property="VerticalContentAlignment" Value="Center" />
                     </Style>
 
+                    <Style x:Key="ReportLeftAlignedCell"
+                           TargetType="DataGridCell"
+                           BasedOn="{StaticResource ReportCenteredCell}">
+                        <Setter Property="HorizontalContentAlignment" Value="Left" />
+                    </Style>
+
+                    <Style x:Key="ReportLeftAlignedHeader"
+                           TargetType="DataGridColumnHeader"
+                           BasedOn="{StaticResource ReportCenteredHeader}">
+                        <Setter Property="HorizontalContentAlignment" Value="Left" />
+                    </Style>
+
                     <Style TargetType="{x:Type DatePickerTextBox}">
                         <Setter Property="Padding" Value="9,0" />
                         <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -342,9 +354,13 @@
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Konto"
                                                             Binding="{Binding Konto}"
+                                                            CellStyle="{StaticResource ReportLeftAlignedCell}"
+                                                            HeaderStyle="{StaticResource ReportLeftAlignedHeader}"
                                                             Width="115" />
                                         <DataGridTextColumn Header="Kupac"
                                                             Binding="{Binding NazivKupca}"
+                                                            CellStyle="{StaticResource ReportLeftAlignedCell}"
+                                                            HeaderStyle="{StaticResource ReportLeftAlignedHeader}"
                                                             Width="2*" />
                                         <DataGridTextColumn Header="Aparati"
                                                             Binding="{Binding BrojAparata}"

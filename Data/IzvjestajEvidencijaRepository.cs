@@ -7,11 +7,13 @@ namespace PpEvidencija.Data;
 
 public sealed class IzvjestajEvidencijaRepository : IIzvjestajEvidencijaRepository
 {
-    private readonly SqlConnectionFactory _connectionFactory;
+    private readonly EvidencijaConnectionFactory _connectionFactory;
+    private readonly KontoRepository _accounts;
 
-    public IzvjestajEvidencijaRepository(SqlConnectionFactory connectionFactory)
+    public IzvjestajEvidencijaRepository(EvidencijaConnectionFactory connectionFactory, KontoRepository accounts)
     {
         _connectionFactory = connectionFactory;
+        _accounts = accounts;
     }
 
     public async Task<IReadOnlyList<IzvjestajPregledRed>> GetPregledAsync(
@@ -45,13 +47,15 @@ public sealed class IzvjestajEvidencijaRepository : IIzvjestajEvidencijaReposito
                   OR (@statusFilter = 1 AND Zakljucen = 1)
                   OR (@statusFilter = 0 AND Zakljucen = 0)
               )
-            ORDER BY Konto, NazivKupca;
+            ORDER BY Konto;
             """;
 
         await using var connection = await _connectionFactory.OpenAsync(cancellationToken);
         var rows = await connection.QueryAsync<IzvjestajPregledRed>(new CommandDefinition(
             sql, new { statusFilter = (int)statusFilter }, cancellationToken: cancellationToken));
-        return rows.AsList();
+        var result = rows.AsList();
+        await _accounts.EnrichNamesAsync(result, cancellationToken);
+        return result;
     }
 
     public async Task<IReadOnlyList<IzvjestajPregledRed>> GetHistorijaAsync(
@@ -75,7 +79,9 @@ public sealed class IzvjestajEvidencijaRepository : IIzvjestajEvidencijaReposito
             transaction,
             cancellationToken: cancellationToken));
         await transaction.CommitAsync(cancellationToken);
-        return rows.AsList();
+        var result = rows.AsList();
+        await _accounts.EnrichNamesAsync(result, cancellationToken);
+        return result;
     }
 
     public async Task ZakljuciAsync(

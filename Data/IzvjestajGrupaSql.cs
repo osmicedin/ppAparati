@@ -11,7 +11,6 @@ internal static class IzvjestajGrupaSql
             g.id AS GrupaId,
             g.verzija AS Verzija,
             LTRIM(RTRIM(g.konto)) AS Konto,
-            ISNULL(kupac.Naziv, N'') AS NazivKupca,
             CAST(aparati.BrojAparata AS int) AS BrojAparata,
             aparati.DatumOd,
             aparati.DatumDo,
@@ -30,14 +29,6 @@ internal static class IzvjestajGrupaSql
             FROM dbo.ppaparati AS p
             WHERE p.grupa_id = g.id
         ) AS aparati
-        OUTER APPLY
-        (
-            SELECT TOP (1)
-                LTRIM(RTRIM(CAST(k.naziv AS nvarchar(255)))) AS Naziv
-            FROM dbo.konta AS k
-            WHERE LTRIM(RTRIM(CAST(k.konto AS nvarchar(20)))) = g.konto
-            ORDER BY LTRIM(RTRIM(CAST(k.naziv AS nvarchar(255))))
-        ) AS kupac
         WHERE aparati.BrojAparata > 0
         """;
 

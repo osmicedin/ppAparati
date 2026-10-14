@@ -199,7 +199,7 @@ public partial class MainWindow : Window
 
     private async void KontoComboBox_DropDownOpened(object sender, EventArgs e)
     {
-        if (sender is not ComboBox comboBox || comboBox.Items.Count > 0)
+        if (_suppressKontoSearch || sender is not ComboBox comboBox || comboBox.Items.Count > 0)
         {
             return;
         }
@@ -267,13 +267,7 @@ public partial class MainWindow : Window
             _suppressKontoSearch = true;
             try
             {
-                comboBox.ItemsSource = konta;
-                comboBox.SelectedItem = null;
-                comboBox.Text = enteredText;
-                if (comboBox.IsKeyboardFocusWithin)
-                {
-                    comboBox.IsDropDownOpen = true;
-                }
+                PrikaziRezultateKonta(comboBox, konta, comboBox.IsKeyboardFocusWithin);
             }
             finally
             {
@@ -294,6 +288,28 @@ public partial class MainWindow : Window
         {
             txtGlobalStatus.Text = $"Pretraga konta nije uspjela: {ex.Message}";
         }
+    }
+
+    internal static void PrikaziRezultateKonta(
+        ComboBox comboBox,
+        IReadOnlyList<Konto> konta,
+        bool openDropDown)
+    {
+        var enteredText = comboBox.Text;
+        var editor = comboBox.Template?.FindName("PART_EditableTextBox", comboBox) as TextBox;
+        var selectionStart = editor?.SelectionStart ?? enteredText.Length;
+        var selectionLength = editor?.SelectionLength ?? 0;
+
+        comboBox.ItemsSource = konta;
+        comboBox.SelectedItem = null;
+        comboBox.Text = enteredText;
+        if (openDropDown)
+        {
+            comboBox.IsDropDownOpen = true;
+        }
+
+        // WPF selects all text when an editable ComboBox opens; keep the user's caret/selection.
+        editor?.Select(selectionStart, selectionLength);
     }
 
     private bool TryBuildInput(out PpAparatInput? input, out IReadOnlyList<string> errors)
@@ -597,8 +613,9 @@ public partial class MainWindow : Window
                 txtIzvjestajStatus.Text = "Izabrani skup nema aparata.";
                 return;
             }
+            var datumNaziva = DateTime.Today.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
             var outputPath = _reportDialogs.ChooseOutputPath(this,
-                $"Zapisnik_{SafeFileName(snapshot.Grupa.Konto)}_skup-{snapshot.Grupa.GrupaId}.docx");
+                $"aparati_{SafeFileName(snapshot.Grupa.Konto)}_{datumNaziva}_{snapshot.Grupa.GrupaId}.docx");
             if (outputPath is null)
             {
                 txtIzvjestajStatus.Text = "Generisanje je otkazano.";

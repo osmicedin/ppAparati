@@ -7,7 +7,7 @@ public sealed class IzvjestajPregledRed
     public long GrupaId { get; init; }
     public long Verzija { get; init; }
     public string Konto { get; init; } = string.Empty;
-    public string NazivKupca { get; init; } = string.Empty;
+    public string NazivKupca { get; set; } = string.Empty;
     public DateTime DatumOd { get; init; }
     public DateTime DatumDo { get; init; }
     public int BrojAparata { get; init; }

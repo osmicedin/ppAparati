@@ -7,11 +7,13 @@ namespace PpEvidencija.Data;
 
 public sealed class PpAparatRepository : IPpAparatRepository
 {
-    private readonly SqlConnectionFactory _connectionFactory;
+    private readonly EvidencijaConnectionFactory _connectionFactory;
+    private readonly KontoRepository _accounts;
 
-    public PpAparatRepository(SqlConnectionFactory connectionFactory)
+    public PpAparatRepository(EvidencijaConnectionFactory connectionFactory, KontoRepository accounts)
     {
         _connectionFactory = connectionFactory;
+        _accounts = accounts;
     }
 
     public async Task<long> InsertAsync(
@@ -28,12 +30,12 @@ public sealed class PpAparatRepository : IPpAparatRepository
 
         var konto = IzvjestajGrupaSql.ValidateAccount(input.Konto);
         korisnickoIme = IzvjestajGrupaSql.ValidateUser(korisnickoIme);
+        if (!konto.StartsWith("211", StringComparison.Ordinal))
+            throw new ArgumentException("Dozvoljena su samo konta koja počinju sa 211.", nameof(input));
 
-        const string accountExistsSql = """
-            SELECT COUNT_BIG(1)
-            FROM dbo.konta
-            WHERE LTRIM(RTRIM(CAST(konto AS nvarchar(20)))) = @konto;
-            """;
+        // Resolve ERP data before starting a local transaction or taking account locks.
+        if (!await _accounts.ExistsAsync(konto, cancellationToken))
+            throw new InvalidOperationException("Odabrani konto više ne postoji u ERP tabeli konta.");
 
         const string insertSql = """
             DECLARE @grupaId bigint;
@@ -95,16 +97,6 @@ public sealed class PpAparatRepository : IPpAparatRepository
             IsolationLevel.ReadCommitted, cancellationToken);
         await IzvjestajGrupaSql.LockAccountAsync(
             connection, transaction, konto, exclusive: true, cancellationToken);
-
-        var accountCount = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            accountExistsSql,
-            new { konto = IzvjestajGrupaSql.AccountParameter(konto) },
-            transaction,
-            cancellationToken: cancellationToken));
-        if (accountCount == 0)
-        {
-            throw new InvalidOperationException("Odabrani konto više ne postoji u tabeli konta.");
-        }
 
         var id = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             insertSql,
@@ -172,6 +164,7 @@ public sealed class PpAparatRepository : IPpAparatRepository
         var aparati = await connection.QueryAsync<PpAparatRecord>(new CommandDefinition(
             recordsSql, new { grupaId }, transaction, cancellationToken: cancellationToken));
         await transaction.CommitAsync(cancellationToken);
+        await _accounts.EnrichNamesAsync([grupa], cancellationToken);
         return new IzvjestajSnimak(grupa, aparati.AsList());
     }
 }
